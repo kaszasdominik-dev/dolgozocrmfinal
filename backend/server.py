@@ -1213,6 +1213,83 @@ async def get_workers(
     
     return result
 
+@api_router.post("/workers/bulk-geocode")
+async def bulk_geocode_workers(
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_admin)
+):
+    """Start bulk geocoding for all workers without coordinates"""
+    # Count workers that need geocoding
+    query = {
+        "address": {"$exists": True, "$ne": ""},
+        "$or": [
+            {"latitude": {"$exists": False}},
+            {"latitude": None}
+        ]
+    }
+    count = await db.workers.count_documents(query)
+    
+    if count == 0:
+        return {"message": "Minden dolgozó címe már geocodolva van", "total": 0}
+    
+    # Start background task
+    job_id = str(uuid.uuid4())
+    job_doc = {
+        "id": job_id,
+        "type": "bulk_geocode",
+        "status": "running",
+        "total": count,
+        "processed": 0,
+        "success": 0,
+        "failed": 0,
+        "started_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.background_jobs.insert_one(job_doc)
+    
+    background_tasks.add_task(process_bulk_geocoding, job_id)
+    
+    return {
+        "message": "Geocodolás elindítva",
+        "job_id": job_id,
+        "total": count
+    }
+
+@api_router.get("/workers/geocode-status/{job_id}")
+async def get_geocode_job_status(job_id: str, user: dict = Depends(get_current_user)):
+    """Get the status of a bulk geocoding job"""
+    job = await db.background_jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job nem található")
+    return job
+
+@api_router.get("/workers/geocode-stats")
+async def get_geocode_stats(user: dict = Depends(get_current_user)):
+    """Get statistics about geocoded workers"""
+    total = await db.workers.count_documents({})
+    geocoded = await db.workers.count_documents({
+        "latitude": {"$exists": True, "$ne": None}
+    })
+    not_geocoded = await db.workers.count_documents({
+        "address": {"$exists": True, "$ne": ""},
+        "$or": [
+            {"latitude": {"$exists": False}},
+            {"latitude": None}
+        ]
+    })
+    no_address = await db.workers.count_documents({
+        "$or": [
+            {"address": {"$exists": False}},
+            {"address": ""}
+        ]
+    })
+    
+    return {
+        "total": total,
+        "geocoded": geocoded,
+        "not_geocoded": not_geocoded,
+        "no_address": no_address
+    }
+
 @api_router.get("/workers/{worker_id}", response_model=WorkerResponse)
 async def get_worker(worker_id: str, user: dict = Depends(get_current_user)):
     query = {"id": worker_id}
