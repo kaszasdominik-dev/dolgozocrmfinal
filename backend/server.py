@@ -2128,6 +2128,34 @@ async def update_worker_status_in_project(
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Kapcsolat nem található")
+    
+    # Státusz változás naplózása a dolgozó notes mezőjébe
+    status = await db.statuses.find_one({"id": data.status_id}, {"_id": 0})
+    if status:
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+        
+        # Projekt neve lekérése
+        project = await db.projects.find_one({"id": project_id}, {"_id": 0, "name": 1})
+        project_name = project["name"] if project else "Ismeretlen projekt"
+        
+        # Meglévő notes lekérése
+        worker_doc = await db.workers.find_one({"id": worker_id}, {"_id": 0})
+        existing_notes = worker_doc.get("notes", "") if worker_doc else ""
+        
+        # Új történet bejegyzés
+        new_entry = f"[{timestamp}] {project_name} - Státusz: {status['name']}"
+        if data.notes:
+            new_entry += f" - {data.notes}"
+        
+        # Összefűzés
+        updated_notes = f"{new_entry}\n{existing_notes}" if existing_notes else new_entry
+        
+        # Mentés
+        await db.workers.update_one(
+            {"id": worker_id},
+            {"$set": {"notes": updated_notes}}
+        )
+    
     return {"message": "Státusz frissítve"}
 
 @api_router.get("/projects/{project_id}/archive")
