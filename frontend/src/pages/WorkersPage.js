@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Slider } from "@/components/ui/slider";
 import {
   Plus,
   Search,
@@ -19,7 +20,10 @@ import {
   User,
   X,
   FileSpreadsheet,
-  Eye
+  Eye,
+  MapPin,
+  Navigation,
+  RefreshCw
 } from "lucide-react";
 
 export default function WorkersPage() {
