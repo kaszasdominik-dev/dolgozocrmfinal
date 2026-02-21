@@ -35,6 +35,7 @@ export default function WorkersPage() {
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [counties, setCounties] = useState([]);
   const [loading, setLoading] = useState(true);
   
   // Filters
@@ -43,6 +44,20 @@ export default function WorkersPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("");
+  const [countyFilter, setCountyFilter] = useState("");
+  const [positionFilter, setPositionFilter] = useState("");
+  
+  // Location filter
+  const [locationSearch, setLocationSearch] = useState("");
+  const [centerLat, setCenterLat] = useState(null);
+  const [centerLon, setCenterLon] = useState(null);
+  const [radiusKm, setRadiusKm] = useState(30);
+  const [locationEnabled, setLocationEnabled] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
+  
+  // Geocode stats
+  const [geocodeStats, setGeocodeStats] = useState(null);
+  const [bulkGeocodeJob, setBulkGeocodeJob] = useState(null);
   
   // Add to project dialog
   const [addToProjectOpen, setAddToProjectOpen] = useState(false);
