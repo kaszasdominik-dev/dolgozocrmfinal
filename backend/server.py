@@ -1463,7 +1463,9 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
         "workers": workers,
         "positions": positions,
         "trials": trials,
-        "created_at": p.get("created_at", "")
+        "created_at": p.get("created_at", ""),
+        "planned_headcount": p.get("planned_headcount", 0),
+        "active_worker_count": active_worker_count
     }
 
 @api_router.post("/projects", response_model=ProjectResponse)
