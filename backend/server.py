@@ -1106,6 +1106,11 @@ async def get_workers(
     worker_type_id: Optional[str] = None,
     tag_id: Optional[str] = None,
     owner_id: Optional[str] = None,
+    county: Optional[str] = None,
+    position_filter: Optional[str] = None,
+    center_lat: Optional[float] = None,
+    center_lon: Optional[float] = None,
+    radius_km: Optional[float] = None,
     user: dict = Depends(get_current_user)
 ):
     query = {}
@@ -1122,6 +1127,10 @@ async def get_workers(
         query["worker_type_id"] = worker_type_id
     if tag_id:
         query["tag_ids"] = tag_id
+    if county:
+        query["county"] = {"$regex": county, "$options": "i"}
+    if position_filter:
+        query["position"] = {"$regex": position_filter, "$options": "i"}
     if search:
         query["$or"] = [
             {"name": {"$regex": search, "$options": "i"}},
@@ -1132,7 +1141,20 @@ async def get_workers(
             {"position": {"$regex": search, "$options": "i"}}
         ]
     
-    workers = await db.workers.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    workers = await db.workers.find(query, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    
+    # Filter by distance if center coordinates and radius are provided
+    if center_lat is not None and center_lon is not None and radius_km is not None:
+        filtered_workers = []
+        for w in workers:
+            w_lat = w.get("latitude")
+            w_lon = w.get("longitude")
+            if w_lat and w_lon:
+                distance = haversine_distance(center_lat, center_lon, w_lat, w_lon)
+                if distance <= radius_km:
+                    w["distance_km"] = round(distance, 1)
+                    filtered_workers.append(w)
+        workers = filtered_workers
     
     # Enrich with type names, tags, project statuses
     result = []
@@ -1147,6 +1169,11 @@ async def get_workers(
         
         # Global status
         w["global_status"] = w.get("global_status", "Feldolgozatlan")
+        
+        # Geocoding fields
+        w["latitude"] = w.get("latitude")
+        w["longitude"] = w.get("longitude")
+        w["county"] = w.get("county", "")
         
         # Get tags
         tag_ids = w.get("tag_ids", [])
