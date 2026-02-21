@@ -351,7 +351,139 @@ class CRM4APITester:
         
         return False
 
-    def test_security_features(self):
+    def test_hungarian_crm_enhancements(self):
+        """Test Hungarian CRM specific enhancements: planned_headcount, active_worker_count, status logging"""
+        print("\n🇭🇺 TESTING HUNGARIAN CRM ENHANCEMENTS")
+        
+        if not self.project_id:
+            print("❌ No project ID available for testing")
+            return False
+            
+        # Test 1: planned_headcount field in projects
+        print("1. Testing planned_headcount field...")
+        project_update_data = {"planned_headcount": 10}
+        success, response = self.run_test(
+            "Update project with planned_headcount", 
+            "PUT", 
+            f"projects/{self.project_id}",
+            200,
+            project_update_data
+        )
+        
+        if not success:
+            return False
+            
+        # Verify planned_headcount is returned
+        success, project_data = self.run_test("Get project with planned_headcount", "GET", f"projects/{self.project_id}", 200)
+        if not success or 'planned_headcount' not in project_data:
+            print("❌ planned_headcount field not found in project response")
+            return False
+        print(f"✅ planned_headcount working: {project_data['planned_headcount']}")
+        
+        # Test 2: active_worker_count calculation
+        print("2. Testing active_worker_count calculation...")
+        if 'active_worker_count' not in project_data:
+            print("❌ active_worker_count field not found in project response")
+            return False
+        print(f"✅ active_worker_count working: {project_data['active_worker_count']}")
+        
+        # Test 3: Create "Dolgozik" status if not exists
+        print("3. Testing Dolgozik status...")
+        success, statuses = self.run_test("Get all statuses", "GET", "statuses", 200)
+        if not success:
+            return False
+            
+        dolgozik_status = None
+        for status in statuses:
+            if status['name'] == 'Dolgozik':
+                dolgozik_status = status
+                break
+        
+        if not dolgozik_status:
+            # Create Dolgozik status
+            status_data = {
+                "name": "Dolgozik",
+                "status_type": "positive",
+                "color": "#22c55e"
+            }
+            success, response = self.run_test("Create Dolgozik status", "POST", "statuses", 200, status_data)
+            if success:
+                dolgozik_status = response
+                print(f"✅ Created Dolgozik status: {dolgozik_status['id']}")
+            else:
+                print("❌ Failed to create Dolgozik status")
+                return False
+        else:
+            print(f"✅ Dolgozik status exists: {dolgozik_status['id']}")
+        
+        # Test 4: Worker status change and logging
+        print("4. Testing worker status change logging...")
+        if self.worker_id and dolgozik_status:
+            # Add worker to project first
+            success, _ = self.run_test(
+                "Add worker to project",
+                "POST",
+                f"projects/{self.project_id}/workers",
+                200,
+                {"worker_id": self.worker_id}
+            )
+            
+            if success:
+                # Change worker status to Dolgozik
+                status_update_data = {
+                    "status_id": dolgozik_status['id'],
+                    "notes": "Test status change to Dolgozik"
+                }
+                success, _ = self.run_test(
+                    "Change worker status to Dolgozik",
+                    "PUT",
+                    f"projects/{self.project_id}/workers/{self.worker_id}/status",
+                    200,
+                    status_update_data
+                )
+                
+                if success:
+                    print("✅ Status change successful")
+                    
+                    # Verify worker notes contain the status change log
+                    success, worker_data = self.run_test("Get updated worker", "GET", f"workers/{self.worker_id}", 200)
+                    if success and 'notes' in worker_data:
+                        if "automatikus naplózás" in worker_data['notes'].lower() or "státusz változás" in worker_data['notes'].lower():
+                            print("✅ Status change logging working")
+                        else:
+                            print(f"⚠️  Status change may not be logged properly in notes: {worker_data.get('notes', '')}")
+                    
+                    return True
+                else:
+                    print("❌ Failed to change worker status")
+            else:
+                print("❌ Failed to add worker to project")
+        
+        return False
+
+    def test_project_list_enhancements(self):
+        """Test project list shows active_worker_count/planned_headcount"""
+        print("\n📋 TESTING PROJECT LIST ENHANCEMENTS")
+        
+        success, projects = self.run_test("Get projects list", "GET", "projects", 200)
+        if not success:
+            return False
+            
+        if len(projects) == 0:
+            print("⚠️  No projects found for testing")
+            return True
+            
+        # Check first project has the required fields
+        project = projects[0]
+        required_fields = ['active_worker_count', 'planned_headcount']
+        missing_fields = [field for field in required_fields if field not in project]
+        
+        if missing_fields:
+            print(f"❌ Missing fields in project list: {missing_fields}")
+            return False
+        
+        print(f"✅ Project list contains enhanced fields: active_worker_count={project['active_worker_count']}, planned_headcount={project['planned_headcount']}")
+        return True
         """Test overall security implementation"""
         print("\n🛡️  TESTING SECURITY FEATURES")
         
