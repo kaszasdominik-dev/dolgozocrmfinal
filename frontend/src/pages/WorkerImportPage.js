@@ -101,7 +101,7 @@ export default function WorkerImportPage() {
         if (colLower.includes("név") || colLower === "name") autoMapping.name = idx;
         else if (colLower.includes("telefon") || colLower.includes("phone") || colLower.includes("tel")) autoMapping.phone = idx;
         else if (colLower.includes("email") || colLower.includes("e-mail")) autoMapping.email = idx;
-        else if (colLower.includes("cím") || colLower.includes("lakcím") || colLower.includes("address")) autoMapping.address = idx;
+        else if (colLower.includes("cím") || colLower.includes("lakóhely") || colLower.includes("lakcím") || colLower.includes("address")) autoMapping.address = idx;
         else if (colLower.includes("pozíció") || colLower.includes("position") || colLower.includes("munkakör")) autoMapping.position = idx;
         else if (colLower.includes("tapasztalat") || colLower.includes("experience")) autoMapping.experience = idx;
         else if (colLower.includes("megjegyzés") || colLower.includes("note")) autoMapping.notes = idx;
