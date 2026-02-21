@@ -273,26 +273,112 @@ export default function WorkersPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-card rounded-lg border border-border p-3 flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-[150px]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Keresés..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-9" data-testid="search-input" />
-        </div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-[130px] h-9" data-testid="category-filter"><SelectValue placeholder="Kategória" /></SelectTrigger>
-          <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
-        </Select>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-[130px] h-9" data-testid="type-filter"><SelectValue placeholder="Típus" /></SelectTrigger>
-          <SelectContent>{workerTypes.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-        </Select>
-        {user?.role === "admin" && (
-          <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-            <SelectTrigger className="w-[130px] h-9" data-testid="owner-filter"><SelectValue placeholder="Toborzó" /></SelectTrigger>
-            <SelectContent>{users.map(u => <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>)}</SelectContent>
+      <div className="bg-card rounded-lg border border-border p-3 space-y-3">
+        {/* Row 1: Basic filters */}
+        <div className="flex flex-wrap gap-2">
+          <div className="relative flex-1 min-w-[150px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder="Keresés..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-9" data-testid="search-input" />
+          </div>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-[130px] h-9" data-testid="category-filter"><SelectValue placeholder="Kategória" /></SelectTrigger>
+            <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
           </Select>
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-[130px] h-9" data-testid="type-filter"><SelectValue placeholder="Típus" /></SelectTrigger>
+            <SelectContent>{workerTypes.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+          </Select>
+          {user?.role === "admin" && (
+            <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+              <SelectTrigger className="w-[130px] h-9" data-testid="owner-filter"><SelectValue placeholder="Toborzó" /></SelectTrigger>
+              <SelectContent>{users.map(u => <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>)}</SelectContent>
+            </Select>
+          )}
+          {hasFilters && <Button variant="ghost" size="sm" onClick={clearFilters}><X className="w-4 h-4" /></Button>}
+        </div>
+
+        {/* Row 2: Location filters */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
+          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <MapPin className="w-4 h-4" />
+            <span>Hely szűrés:</span>
+          </div>
+          
+          <Select value={countyFilter} onValueChange={setCountyFilter}>
+            <SelectTrigger className="w-[150px] h-9" data-testid="county-filter">
+              <SelectValue placeholder="Megye" />
+            </SelectTrigger>
+            <SelectContent>
+              {counties.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Input 
+            placeholder="Pozíció szűrés..." 
+            value={positionFilter} 
+            onChange={(e) => setPositionFilter(e.target.value)} 
+            className="w-[150px] h-9" 
+            data-testid="position-filter" 
+          />
+          
+          <div className="flex items-center gap-1">
+            <Input 
+              placeholder="Város/cím..." 
+              value={locationSearch} 
+              onChange={(e) => setLocationSearch(e.target.value)} 
+              className="w-[180px] h-9" 
+              onKeyDown={(e) => e.key === "Enter" && handleLocationSearch()}
+              data-testid="location-search"
+            />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleLocationSearch} 
+              disabled={geocoding || !locationSearch.trim()}
+              className="h-9"
+            >
+              {geocoding ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+            </Button>
+          </div>
+
+          {locationEnabled && centerLat && (
+            <div className="flex items-center gap-2 bg-primary/10 px-3 py-1 rounded-lg">
+              <span className="text-sm text-primary font-medium">{radiusKm} km</span>
+              <Slider
+                value={[radiusKm]}
+                onValueChange={([val]) => setRadiusKm(val)}
+                min={5}
+                max={100}
+                step={5}
+                className="w-[100px]"
+              />
+              <Button variant="ghost" size="sm" onClick={() => { setLocationEnabled(false); setCenterLat(null); setCenterLon(null); }}>
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Geocode status bar */}
+        {user?.role === "admin" && geocodeStats && (
+          <div className="flex items-center justify-between pt-2 border-t border-border text-xs text-muted-foreground">
+            <div className="flex items-center gap-4">
+              <span>Geocodolt: {geocodeStats.geocoded}/{geocodeStats.total}</span>
+              {geocodeStats.not_geocoded > 0 && (
+                <span className="text-amber-500">{geocodeStats.not_geocoded} feldolgozatlan</span>
+              )}
+            </div>
+            {geocodeStats.not_geocoded > 0 && (
+              <Button variant="outline" size="sm" onClick={handleBulkGeocode} disabled={bulkGeocodeJob?.status === "running"}>
+                {bulkGeocodeJob?.status === "running" ? (
+                  <><RefreshCw className="w-3 h-3 mr-1 animate-spin" />{bulkGeocodeJob.processed}/{bulkGeocodeJob.total}</>
+                ) : (
+                  <><MapPin className="w-3 h-3 mr-1" />Címek feldolgozása</>
+                )}
+              </Button>
+            )}
+          </div>
         )}
-        {hasFilters && <Button variant="ghost" size="sm" onClick={clearFilters}><X className="w-4 h-4" /></Button>}
       </div>
 
       {/* Table */}
