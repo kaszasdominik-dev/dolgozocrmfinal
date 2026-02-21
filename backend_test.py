@@ -484,7 +484,8 @@ class CRM4APITester:
         
         print(f"✅ Project list contains enhanced fields: active_worker_count={project['active_worker_count']}, planned_headcount={project['planned_headcount']}")
         return True
-        """Test overall security implementation"""
+
+    def test_security_features(self):
         print("\n🛡️  TESTING SECURITY FEATURES")
         
         security_tests_passed = 0
