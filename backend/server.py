@@ -1482,12 +1482,13 @@ async def create_project(data: ProjectCreate, user: dict = Depends(require_admin
         "recruiter_ids": data.recruiter_ids,
         "is_closed": False,
         "owner_id": user["id"],
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "planned_headcount": data.planned_headcount or 0
     }
     await db.projects.insert_one(project_doc)
     
     owner_name = user.get("name", user["email"])
-    return ProjectResponse(**project_doc, worker_count=0, position_count=0, total_headcount=0, trial_count=0, recruiters=[], owner_name=owner_name)
+    return ProjectResponse(**project_doc, worker_count=0, position_count=0, total_headcount=0, trial_count=0, recruiters=[], owner_name=owner_name, active_worker_count=0)
 
 @api_router.put("/projects/{project_id}", response_model=ProjectResponse)
 async def update_project(project_id: str, data: ProjectUpdate, user: dict = Depends(get_current_user)):
