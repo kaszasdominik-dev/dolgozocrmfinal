@@ -232,7 +232,7 @@ export default function WorkerDetailPage() {
                         <MapPin className="w-5 h-5 text-primary" />
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Lakcím</p>
+                        <p className="text-sm text-muted-foreground">Lakóhely</p>
                         <p className="font-medium text-foreground">{worker.address}</p>
                       </div>
                     </div>
