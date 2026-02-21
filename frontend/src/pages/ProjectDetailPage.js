@@ -747,7 +747,7 @@ export default function ProjectDetailPage() {
                   <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">Nincs dolgozó</TableCell></TableRow>
                 ) : (
                   project.workers?.map(w => (
-                    
+                    <TableRow key={w.id} className="border-border">
                       <TableCell className="font-medium text-foreground">
                         <Link to={`/workers/${w.id}`} className="hover:text-primary">{w.name}</Link>
                       </TableCell>
