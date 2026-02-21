@@ -50,12 +50,12 @@ code {
     --chart-5: 27 87% 67%;
   }
 
-  .dark {
+  :root.dark, .dark {
     --background: 240 10% 4%;
     --foreground: 0 0% 98%;
-    --card: 240 10% 6%;
+    --card: 240 10% 8%;
     --card-foreground: 0 0% 98%;
-    --popover: 240 10% 6%;
+    --popover: 240 10% 8%;
     --popover-foreground: 0 0% 98%;
     --primary: 250 85% 65%;
     --primary-foreground: 240 5% 4%;
@@ -67,8 +67,8 @@ code {
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 4% 16%;
-    --input: 240 4% 16%;
+    --border: 240 4% 20%;
+    --input: 240 4% 20%;
     --ring: 250 85% 65%;
   }
 }
