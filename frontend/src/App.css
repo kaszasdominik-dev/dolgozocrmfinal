@@ -1,0 +1,159 @@
+/* App.css - Dolgozó CRM styles */
+
+/* Remove default centering */
+.App {
+  min-height: 100vh;
+}
+
+/* Card hover effects */
+.worker-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.worker-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -5px rgba(99, 102, 241, 0.15);
+}
+
+/* Status badge colors */
+.status-jelentkezett { background-color: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+.status-megerositve { background-color: #dcfce7; color: #166534; border-color: #86efac; }
+.status-dolgozik { background-color: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+.status-megfelelt { background-color: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+.status-nem-felelt-meg { background-color: #fef2f2; color: #991b1b; border-color: #fca5a5; }
+.status-lemondta { background-color: #fef3c7; color: #92400e; border-color: #fcd34d; }
+.status-nem-jelent-meg { background-color: #f3f4f6; color: #374151; border-color: #d1d5db; }
+
+/* Category colors */
+.category-felvitt { background-color: #dbeafe; color: #1e40af; }
+.category-hideg { background-color: #dcfce7; color: #166534; }
+.category-urlap { background-color: #fed7aa; color: #9a3412; }
+.category-allas { background-color: #e9d5ff; color: #7c3aed; }
+.category-ingazo { background-color: #f3f4f6; color: #374151; }
+.category-szallasos { background-color: #fecaca; color: #991b1b; }
+
+/* Sidebar transitions */
+.sidebar-link {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* Input focus states */
+input:focus, select:focus, textarea:focus {
+  outline: none;
+}
+
+/* Button press effect */
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Table row hover */
+.table-row-hover:hover {
+  background-color: hsl(var(--muted) / 0.5);
+}
+
+/* Glass morphism header */
+.glass-header {
+  backdrop-filter: blur(16px);
+  background-color: rgba(255, 255, 255, 0.8);
+}
+
+/* Project status history */
+.project-status-item {
+  transition: opacity 0.2s ease;
+}
+
+.project-status-item:not(:first-child) {
+  opacity: 0.7;
+}
+
+.project-status-item:not(:first-child):hover {
+  opacity: 1;
+}
+
+/* FullCalendar Custom Styles */
+.calendar-wrapper .fc {
+  --fc-border-color: hsl(var(--border));
+  --fc-button-bg-color: hsl(var(--primary));
+  --fc-button-border-color: hsl(var(--primary));
+  --fc-button-hover-bg-color: hsl(var(--primary) / 0.9);
+  --fc-button-hover-border-color: hsl(var(--primary) / 0.9);
+  --fc-button-active-bg-color: hsl(var(--primary) / 0.8);
+  --fc-today-bg-color: hsl(var(--primary) / 0.05);
+  --fc-event-bg-color: hsl(var(--primary));
+  --fc-event-border-color: hsl(var(--primary));
+  font-family: inherit;
+}
+
+.calendar-wrapper .fc-theme-standard td,
+.calendar-wrapper .fc-theme-standard th {
+  border-color: hsl(var(--border));
+}
+
+.calendar-wrapper .fc-theme-standard .fc-scrollgrid {
+  border-color: hsl(var(--border));
+}
+
+.calendar-wrapper .fc-col-header-cell {
+  background-color: hsl(var(--muted));
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.calendar-wrapper .fc-col-header-cell-cushion {
+  padding: 8px 4px;
+  font-size: 0.875rem;
+}
+
+.calendar-wrapper .fc-daygrid-day-number {
+  color: hsl(var(--foreground));
+  font-weight: 500;
+  padding: 8px;
+}
+
+.calendar-wrapper .fc-daygrid-day.fc-day-today {
+  background-color: hsl(var(--primary) / 0.1);
+}
+
+.calendar-wrapper .fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
+  color: hsl(var(--primary));
+  font-weight: 700;
+}
+
+.calendar-wrapper .fc-event {
+  border-radius: 4px;
+  font-size: 0.75rem;
+  padding: 2px 4px;
+  border: none;
+}
+
+.calendar-wrapper .fc-event-title {
+  font-weight: 500;
+}
+
+.calendar-wrapper .fc-more-link {
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+
+.calendar-wrapper .fc-timegrid-slot {
+  height: 3em;
+}
+
+.calendar-wrapper .fc-timegrid-slot-label-cushion {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Dark mode calendar support */
+.dark .calendar-wrapper .fc-col-header-cell {
+  background-color: hsl(var(--muted));
+}
+
+.dark .calendar-wrapper .fc-daygrid-day {
+  background-color: transparent;
+}
+
+.dark .calendar-wrapper .fc-daygrid-day:hover {
+  background-color: hsl(var(--muted) / 0.5);
+}
