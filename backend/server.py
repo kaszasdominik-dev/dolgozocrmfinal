@@ -190,6 +190,9 @@ class WorkerCreate(BaseModel):
     global_status: str = "Feldolgozatlan"  # Alap (globális) dolgozói státusz
     project_id: Optional[str] = None  # Opcionális projekt várólistához
     trial_date: Optional[str] = None  # Próba időpont (volt: start_date)
+    latitude: Optional[float] = None  # Geocoding koordináta
+    longitude: Optional[float] = None  # Geocoding koordináta
+    county: Optional[str] = ""  # Megye
 
 class WorkerUpdate(BaseModel):
     name: Optional[str] = None
@@ -203,6 +206,9 @@ class WorkerUpdate(BaseModel):
     experience: Optional[str] = None
     notes: Optional[str] = None
     global_status: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    county: Optional[str] = None
 
 class WorkerResponse(BaseModel):
     id: str
@@ -223,6 +229,9 @@ class WorkerResponse(BaseModel):
     owner_id: str
     owner_name: str
     created_at: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    county: Optional[str] = ""
 
 class ProjectCreate(BaseModel):
     name: str
