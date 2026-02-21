@@ -187,9 +187,64 @@ export default function WorkersPage() {
     setTypeFilter("");
     setTagFilter("");
     setOwnerFilter("");
+    setCountyFilter("");
+    setPositionFilter("");
+    setLocationEnabled(false);
+    setCenterLat(null);
+    setCenterLon(null);
+    setLocationSearch("");
   };
 
-  const hasFilters = search || categoryFilter || typeFilter || tagFilter || ownerFilter;
+  const hasFilters = search || categoryFilter || typeFilter || tagFilter || ownerFilter || countyFilter || positionFilter || locationEnabled;
+
+  const handleLocationSearch = async () => {
+    if (!locationSearch.trim()) return;
+    setGeocoding(true);
+    try {
+      const res = await axios.post(`${API}/geocode`, { address: locationSearch });
+      if (res.data.latitude && res.data.longitude) {
+        setCenterLat(res.data.latitude);
+        setCenterLon(res.data.longitude);
+        setLocationEnabled(true);
+        toast.success(`Találat: ${res.data.display_name || locationSearch}`);
+      } else {
+        toast.error("Nem található a cím");
+      }
+    } catch (e) {
+      toast.error("Hiba a keresésben");
+    } finally {
+      setGeocoding(false);
+    }
+  };
+
+  const handleBulkGeocode = async () => {
+    if (!window.confirm(`${geocodeStats?.not_geocoded || 0} dolgozó címét geocodoljuk? Ez eltarthat egy ideig.`)) return;
+    try {
+      const res = await axios.post(`${API}/workers/bulk-geocode`);
+      setBulkGeocodeJob(res.data);
+      toast.success(`Geocodolás elindítva: ${res.data.total} dolgozó`);
+      
+      // Poll for status
+      const pollStatus = async () => {
+        try {
+          const statusRes = await axios.get(`${API}/workers/geocode-status/${res.data.job_id}`);
+          setBulkGeocodeJob(statusRes.data);
+          if (statusRes.data.status === "running") {
+            setTimeout(pollStatus, 3000);
+          } else {
+            fetchGeocodeStats();
+            fetchData();
+            toast.success(`Kész! ${statusRes.data.success} sikeres, ${statusRes.data.failed} sikertelen`);
+          }
+        } catch (e) {
+          console.error("Poll error:", e);
+        }
+      };
+      setTimeout(pollStatus, 3000);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Hiba");
+    }
+  };
 
   if (loading) {
     return (
