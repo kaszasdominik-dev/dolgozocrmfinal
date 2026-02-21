@@ -535,12 +535,14 @@ def main():
     tests_to_run = [
         ("JWT Secret Validation", tester.test_jwt_secret_validation),
         ("Admin Login", tester.test_admin_login),
-        ("Security Features", tester.test_security_features), 
         ("Status CRUD Operations", tester.test_statuses_crud),
         ("Project Positions (new fields)", tester.test_project_positions),
         ("Waitlist trial_date", tester.test_waitlist_trial_date),
+        ("Hungarian CRM Enhancements", tester.test_hungarian_crm_enhancements),
+        ("Project List Enhancements", tester.test_project_list_enhancements),
         ("Archive Endpoint", tester.test_archive_endpoint),
-        ("Summary Endpoint", tester.test_summary_endpoint)
+        ("Summary Endpoint", tester.test_summary_endpoint),
+        ("Security Features", tester.test_security_features)
     ]
     
     passed_tests = []
