@@ -1272,6 +1272,9 @@ async def get_projects(user: dict = Depends(get_current_user)):
     """Toborzó csak azokat a projekteket látja, ahol ő hozta létre VAGY hozzá van rendelve"""
     projects = await db.projects.find({}, {"_id": 0}).sort("date", -1).to_list(1000)
     
+    # Lekérjük a "Dolgozik" státuszt az aktív dolgozók számlálásához
+    dolgozik_status = await db.statuses.find_one({"name": "Dolgozik"}, {"_id": 0})
+    
     result = []
     for p in projects:
         count = await db.project_workers.count_documents({"project_id": p["id"]})
@@ -1281,6 +1284,14 @@ async def get_projects(user: dict = Depends(get_current_user)):
         # Calculate total headcount from positions
         positions = await db.project_positions.find({"project_id": p["id"]}, {"_id": 0}).to_list(100)
         total_headcount = sum(pos.get("headcount", 0) for pos in positions)
+        
+        # Aktív dolgozók számlálása (Dolgozik státusz)
+        active_worker_count = 0
+        if dolgozik_status:
+            active_worker_count = await db.project_workers.count_documents({
+                "project_id": p["id"],
+                "status_id": dolgozik_status["id"]
+            })
         
         recruiter_ids = p.get("recruiter_ids", [])
         owner_id = p.get("owner_id", "")
@@ -1321,7 +1332,9 @@ async def get_projects(user: dict = Depends(get_current_user)):
             recruiters=recruiters,
             owner_id=owner_id,
             owner_name=owner_name,
-            created_at=p.get("created_at", "")
+            created_at=p.get("created_at", ""),
+            planned_headcount=p.get("planned_headcount", 0),
+            active_worker_count=active_worker_count
         ))
     
     return result
