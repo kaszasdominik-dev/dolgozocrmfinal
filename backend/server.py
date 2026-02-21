@@ -1351,10 +1351,14 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
     if user["role"] != "admin" and owner_id != user["id"] and user["id"] not in recruiter_ids:
         raise HTTPException(status_code=403, detail="Nincs hozzáférésed ehhez a projekthez")
     
+    # Lekérjük a "Dolgozik" státuszt az aktív dolgozók számlálásához
+    dolgozik_status = await db.statuses.find_one({"name": "Dolgozik"}, {"_id": 0})
+    
     # Get workers
     pw_list = await db.project_workers.find({"project_id": project_id}, {"_id": 0}).to_list(1000)
     
     workers = []
+    active_worker_count = 0
     for pw in pw_list:
         w = await db.workers.find_one({"id": pw["worker_id"]}, {"_id": 0})
         if w:
@@ -1364,6 +1368,13 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
             status = await db.statuses.find_one({"id": pw.get("status_id")}, {"_id": 0})
             type_doc = await db.worker_types.find_one({"id": w.get("worker_type_id")}, {"_id": 0})
             owner = await db.users.find_one({"id": w.get("owner_id")}, {"_id": 0, "password": 0})
+            
+            status_name = status["name"] if status else "Hozzárendelve"
+            
+            # Számoljuk az aktív dolgozókat
+            if dolgozik_status and pw.get("status_id") == dolgozik_status["id"]:
+                active_worker_count += 1
+            
             workers.append({
                 "id": w["id"],
                 "name": w["name"],
@@ -1372,10 +1383,11 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
                 "global_status": w.get("global_status", "Feldolgozatlan"),
                 "worker_type_name": type_doc["name"] if type_doc else "",
                 "status_id": pw.get("status_id", ""),
-                "status_name": status["name"] if status else "Hozzárendelve",
+                "status_name": status_name,
                 "notes": pw.get("notes", ""),
                 "added_by": owner.get("name", owner["email"]) if owner else "",
-                "added_at": pw.get("created_at", "")
+                "added_at": pw.get("created_at", ""),
+                "created_at": pw.get("created_at", "")
             })
     
     total_count = await db.project_workers.count_documents({"project_id": project_id})
