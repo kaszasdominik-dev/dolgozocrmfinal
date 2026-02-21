@@ -213,7 +213,7 @@ export default function WorkerFormPage() {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-sm">Lakcím</Label>
+              <Label className="text-sm">Lakóhely</Label>
               <Input value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} placeholder="Budapest, Fő utca 1." className="h-9" data-testid="worker-address-input" />
             </div>
 
