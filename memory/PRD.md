@@ -1,64 +1,87 @@
 # Dolgozó CRM - PRD (Product Requirements Document)
 
 ## Eredeti Probléma Leírás
-Magyar nyelvű CRM alkalmazás munkavállalók kezelésére projekteken.
+Magyar nyelvű CRM alkalmazás munkavállalók kezelésére projekteken, helyszín alapú szűréssel.
 
-### Implementált Funkciók (2026-02-21)
+---
 
-#### 1. Tervezett Létszám (planned_headcount)
+## FÁZIS 1 - Implementált (2026-02-21) ✅
+
+### 1. Tervezett Létszám (planned_headcount)
 - ✅ Új mező hozzáadva projektekhez
-- ✅ Projekt létrehozáskor megadható
-- ✅ Projekt szerkesztéskor módosítható
+- ✅ Projekt létrehozáskor/szerkesztéskor megadható
 
-#### 2. Aktív Dolgozók Számlálása (active_worker_count)
+### 2. Aktív Dolgozók Számlálása (active_worker_count)
 - ✅ Automatikusan számolja a "Dolgozik" státuszú dolgozókat
 - ✅ Projekt lista: dolgozók/tervezett formátum (pl. "1/10")
 - ✅ Progress bar megjelenítése százalékkal
 
-#### 3. "Jelenlegi Dolgozók" Tab
+### 3. "Jelenlegi Dolgozók" Tab
 - ✅ Új tab a projekt részletek oldalon
 - ✅ Csak "Dolgozik" státuszú dolgozókat mutatja
 - ✅ Oszlopok: Név, Telefon, Kategória, Munkakezdés
 
-#### 4. Státusz Változás Naplózása
+### 4. Státusz Változás Naplózása
 - ✅ Automatikus bejegyzés a dolgozó notes mezőjébe
 - ✅ Időbélyeg formátum: [YYYY-MM-DD HH:MM]
 - ✅ Projekt név + státusz + megjegyzés
 
-#### 5. TableRow Bug Javítás
-- ✅ Hiányzó <TableRow key={w.id}> tag javítva a Workers tab-ban
+### 5. TableRow Bug Javítás
+- ✅ Hiányzó <TableRow key={w.id}> tag javítva
 
-## Következő Fázisok
+---
 
-### P0 - Magas Prioritás
-- [ ] "Lakcím" átnevezése "Lakóhely"-re
-- [ ] OpenStreetMap/Nominatim geocoding integráció
-- [ ] Koordináták tárolása dolgozóknál
+## FÁZIS 2 - Implementált (2026-02-21) ✅
 
-### P1 - Közepes Prioritás  
-- [ ] Interaktív térkép szűrés (FB Marketplace stílus)
-- [ ] Megye szerinti szűrés dropdown
-- [ ] Sugár beállítás slider (10-100km)
+### 1. "Lakcím" → "Lakóhely" Átnevezés
+- ✅ WorkerFormPage.js
+- ✅ WorkerDetailPage.js  
+- ✅ WorkerImportPage.js
 
-### P2 - Alacsony Prioritás
-- [ ] Bulk geocoding progress UI (1/1000 dolgozó)
-- [ ] Geocoding review felület problémás címekhez
+### 2. OpenStreetMap/Nominatim Geocoding
+- ✅ Automatikus címből koordináta (lat/lng)
+- ✅ Megye automatikus felismerése
+- ✅ Dolgozó létrehozáskor/módosításkor
+- ✅ 100% ingyenes, API kulcs nem szükséges
+
+### 3. Helyszín Alapú Szűrés
+- ✅ **Megye dropdown** - 20 magyar megye
+- ✅ **Pozíció szűrés** - szabad szöveges
+- ✅ **Város/cím keresés** - geocoding + sugár
+- ✅ **Sugár slider** - 5-100 km (FB Marketplace stílus)
+- ✅ **Haversine távolság számítás** - valós távolság km-ben
+
+### 4. Bulk Geocoding
+- ✅ "Címek feldolgozása" gomb admin felületen
+- ✅ Háttérben fut, progress megjelenítés
+- ✅ 1 kérés/másodperc rate limit (Nominatim policy)
+- ✅ Statisztika: geocodolt/összes
+
+---
 
 ## Tech Stack
-- **Frontend:** React.js + Tailwind CSS + Radix UI
-- **Backend:** FastAPI + MongoDB
-- **Geocoding:** OpenStreetMap/Nominatim (terv)
+- **Frontend:** React.js + Tailwind CSS + Radix UI + Slider
+- **Backend:** FastAPI + MongoDB + httpx
+- **Geocoding:** OpenStreetMap/Nominatim (ingyenes)
+
+## API Endpoint-ok (Új)
+- `GET /api/counties` - Magyar megyék listája
+- `POST /api/geocode` - Egyedi cím geocodolása
+- `POST /api/workers/bulk-geocode` - Tömeges geocodolás
+- `GET /api/workers/geocode-status/{job_id}` - Job státusz
+- `GET /api/workers/geocode-stats` - Geocoding statisztikák
+
+## Szűrő Paraméterek (workers endpoint)
+- `county` - Megye szerinti szűrés
+- `position_filter` - Pozíció szerinti szűrés
+- `center_lat`, `center_lon`, `radius_km` - Távolság szűrés
+
+---
 
 ## Felhasználói Személyek
-1. **Admin** - Teljes hozzáférés, projektek kezelése
-2. **Toborzó** - Saját dolgozók kezelése, hozzárendelt projektek
-
-## API Endpoint-ok
-- `GET /api/projects` - active_worker_count, planned_headcount
-- `GET /api/projects/{id}` - active_worker_count, planned_headcount, workers
-- `PUT /api/projects/{id}/workers/{worker_id}/status` - Státusz naplózás
+1. **Admin** - Teljes hozzáférés, bulk geocoding
+2. **Toborzó** - Saját dolgozók szűrése helyszín szerint
 
 ## Tesztelési Eredmények
-- Backend: 90%
-- Frontend: 70%
-- Összesítve: 85%
+- **Fázis 1:** Backend 90%, Frontend 70%
+- **Fázis 2:** Backend 100%, Frontend 95%
