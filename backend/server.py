@@ -1509,6 +1509,15 @@ async def update_project(project_id: str, data: ProjectUpdate, user: dict = Depe
     positions = await db.project_positions.find({"project_id": project_id}, {"_id": 0}).to_list(100)
     total_headcount = sum(pos.get("headcount", 0) for pos in positions)
     
+    # Aktív dolgozók számlálása
+    dolgozik_status = await db.statuses.find_one({"name": "Dolgozik"}, {"_id": 0})
+    active_worker_count = 0
+    if dolgozik_status:
+        active_worker_count = await db.project_workers.count_documents({
+            "project_id": project_id,
+            "status_id": dolgozik_status["id"]
+        })
+    
     # Get recruiters
     recruiters = []
     for rid in updated.get("recruiter_ids", []):
@@ -1524,7 +1533,7 @@ async def update_project(project_id: str, data: ProjectUpdate, user: dict = Depe
         if owner:
             owner_name = owner.get("name", owner["email"])
     
-    return ProjectResponse(**updated, worker_count=count, position_count=position_count, total_headcount=total_headcount, trial_count=trial_count, recruiters=recruiters, owner_name=owner_name)
+    return ProjectResponse(**updated, worker_count=count, position_count=position_count, total_headcount=total_headcount, trial_count=trial_count, recruiters=recruiters, owner_name=owner_name, active_worker_count=active_worker_count)
 
 @api_router.post("/projects/{project_id}/recruiters")
 async def add_recruiter_to_project(project_id: str, data: ProjectRecruiterAdd, user: dict = Depends(require_admin)):
