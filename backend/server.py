@@ -232,6 +232,7 @@ class ProjectCreate(BaseModel):
     training_location: Optional[str] = ""  # Betanítás / munkavégzés helye
     notes: Optional[str] = ""  # Megjegyzések, elvárások
     recruiter_ids: List[str] = []  # Hozzárendelt toborzók
+    planned_headcount: Optional[int] = 0  # Tervezett létszám
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
@@ -242,6 +243,7 @@ class ProjectUpdate(BaseModel):
     notes: Optional[str] = None
     is_closed: Optional[bool] = None
     recruiter_ids: Optional[List[str]] = None
+    planned_headcount: Optional[int] = None  # Tervezett létszám
 
 class ProjectResponse(BaseModel):
     id: str
@@ -261,6 +263,8 @@ class ProjectResponse(BaseModel):
     owner_id: str = ""
     owner_name: str = ""
     created_at: str
+    planned_headcount: int = 0  # Tervezett létszám
+    active_worker_count: int = 0  # Aktív dolgozók (Dolgozik státusz)
 
 # ==================== PROJECT POSITION MODELS ====================
 
