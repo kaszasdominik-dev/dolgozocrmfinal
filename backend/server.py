@@ -503,6 +503,80 @@ async def create_notification(user_id: str, notification_type: str, title: str, 
     await db.notifications.insert_one(notif_doc)
     return notif_doc
 
+# ==================== GEOCODING HELPER ====================
+
+HUNGARIAN_COUNTIES = [
+    "Bács-Kiskun", "Baranya", "Békés", "Borsod-Abaúj-Zemplén", "Budapest",
+    "Csongrád-Csanád", "Fejér", "Győr-Moson-Sopron", "Hajdú-Bihar", "Heves",
+    "Jász-Nagykun-Szolnok", "Komárom-Esztergom", "Nógrád", "Pest", "Somogy",
+    "Szabolcs-Szatmár-Bereg", "Tolna", "Vas", "Veszprém", "Zala"
+]
+
+async def geocode_address(address: str) -> dict:
+    """Geocode an address using OpenStreetMap Nominatim"""
+    if not address or len(address.strip()) < 3:
+        return {"latitude": None, "longitude": None, "county": None}
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # Add Hungary to improve results
+            search_query = f"{address}, Magyarország"
+            response = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={
+                    "q": search_query,
+                    "format": "json",
+                    "limit": 1,
+                    "addressdetails": 1,
+                    "countrycodes": "hu"
+                },
+                headers={"User-Agent": "DolgozoCRM/1.0"},
+                timeout=10.0
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data and len(data) > 0:
+                    result = data[0]
+                    lat = float(result.get("lat", 0))
+                    lon = float(result.get("lon", 0))
+                    
+                    # Extract county from address details
+                    address_details = result.get("address", {})
+                    county = address_details.get("county", "") or address_details.get("state", "")
+                    
+                    # Clean up county name
+                    if county:
+                        county = county.replace(" megye", "").replace(" vármegye", "")
+                    
+                    return {
+                        "latitude": lat,
+                        "longitude": lon,
+                        "county": county,
+                        "display_name": result.get("display_name", "")
+                    }
+    except Exception as e:
+        logging.error(f"Geocoding error for '{address}': {e}")
+    
+    return {"latitude": None, "longitude": None, "county": None}
+
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate the great circle distance between two points in kilometers"""
+    if not all([lat1, lon1, lat2, lon2]):
+        return float('inf')
+    
+    R = 6371  # Earth's radius in kilometers
+    
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lon = math.radians(lon2 - lon1)
+    
+    a = math.sin(delta_lat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    
+    return R * c
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
