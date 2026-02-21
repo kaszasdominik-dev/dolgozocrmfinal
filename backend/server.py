@@ -1336,6 +1336,15 @@ async def update_worker(worker_id: str, data: WorkerUpdate, user: dict = Depends
         raise HTTPException(status_code=404, detail="Dolgozó nem található")
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    
+    # If address changed, re-geocode
+    if "address" in update_data and update_data["address"] != worker.get("address"):
+        geo_data = await geocode_address(update_data["address"])
+        if geo_data.get("latitude"):
+            update_data["latitude"] = geo_data["latitude"]
+            update_data["longitude"] = geo_data["longitude"]
+            update_data["county"] = geo_data.get("county", "")
+    
     if update_data:
         await db.workers.update_one({"id": worker_id}, {"$set": update_data})
     
