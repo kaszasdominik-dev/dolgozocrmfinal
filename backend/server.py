@@ -1254,6 +1254,78 @@ async def bulk_geocode_workers(
         "total": count
     }
 
+async def process_bulk_geocoding(job_id: str):
+    """Background task to geocode all workers"""
+    try:
+        query = {
+            "address": {"$exists": True, "$ne": ""},
+            "$or": [
+                {"latitude": {"$exists": False}},
+                {"latitude": None}
+            ]
+        }
+        workers = await db.workers.find(query, {"_id": 0, "id": 1, "address": 1}).to_list(10000)
+        
+        total = len(workers)
+        processed = 0
+        success = 0
+        failed = 0
+        
+        for w in workers:
+            try:
+                # Rate limit: 1 request per second for Nominatim
+                await asyncio.sleep(1)
+                
+                geo_data = await geocode_address(w["address"])
+                
+                if geo_data.get("latitude"):
+                    await db.workers.update_one(
+                        {"id": w["id"]},
+                        {"$set": {
+                            "latitude": geo_data["latitude"],
+                            "longitude": geo_data["longitude"],
+                            "county": geo_data.get("county", "")
+                        }}
+                    )
+                    success += 1
+                else:
+                    failed += 1
+                
+                processed += 1
+                
+                # Update job status every 10 workers
+                if processed % 10 == 0:
+                    await db.background_jobs.update_one(
+                        {"id": job_id},
+                        {"$set": {
+                            "processed": processed,
+                            "success": success,
+                            "failed": failed
+                        }}
+                    )
+            except Exception as e:
+                failed += 1
+                processed += 1
+                logging.error(f"Geocoding error for worker {w['id']}: {e}")
+        
+        # Final update
+        await db.background_jobs.update_one(
+            {"id": job_id},
+            {"$set": {
+                "status": "completed",
+                "processed": processed,
+                "success": success,
+                "failed": failed,
+                "completed_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    except Exception as e:
+        logging.error(f"Bulk geocoding error: {e}")
+        await db.background_jobs.update_one(
+            {"id": job_id},
+            {"$set": {"status": "failed", "error": str(e)}}
+        )
+
 @api_router.get("/workers/geocode-status/{job_id}")
 async def get_geocode_job_status(job_id: str, user: dict = Depends(get_current_user)):
     """Get the status of a bulk geocoding job"""
