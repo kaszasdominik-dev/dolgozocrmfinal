@@ -77,7 +77,7 @@ export default function DuplicateResolutionModal({ open, onOpenChange, lead, onR
                 </div>
               )}
               {existingWorker.notes && (
-                <div className="mt-2 p-2 bg-white rounded">
+                <div className="mt-2 p-2 bg-muted rounded">
                   <strong>Megjegyzés:</strong> {existingWorker.notes}
                 </div>
               )}
@@ -104,7 +104,7 @@ export default function DuplicateResolutionModal({ open, onOpenChange, lead, onR
                 </div>
               )}
               {lead.notes && (
-                <div className="mt-2 p-2 bg-white rounded">
+                <div className="mt-2 p-2 bg-muted rounded">
                   <strong>Megjegyzés:</strong> {lead.notes}
                 </div>
               )}
