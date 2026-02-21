@@ -139,13 +139,13 @@ class CRM4APITester:
         """Test admin login functionality"""
         print("\n👤 TESTING ADMIN LOGIN")
         
-        # Try admin login (admin user should exist)
+        # Try admin login with provided credentials
         success, response = self.run_test(
             "Admin Login",
             "POST",
             "auth/login",
             200,
-            data={"email": "admin@dolgozocrm.hu", "password": "Admin123!"},
+            data={"email": "admin@test.com", "password": "AdminTest123!"},
             headers={'Content-Type': 'application/json'}
         )
         
