@@ -77,8 +77,17 @@ code {
   * {
     @apply border-border;
   }
+  html {
+    @apply bg-background;
+  }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  
+  /* Ensure input colors in dark mode */
+  input, textarea, select {
+    color-scheme: light dark;
   }
 }
 
