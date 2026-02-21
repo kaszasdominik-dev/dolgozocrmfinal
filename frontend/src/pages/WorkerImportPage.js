@@ -20,7 +20,7 @@ const WORKER_FIELDS = [
   { key: "name", label: "Név", required: true },
   { key: "phone", label: "Telefon", required: false },
   { key: "email", label: "Email", required: false },
-  { key: "address", label: "Lakcím", required: false },
+  { key: "address", label: "Lakóhely", required: false },
   { key: "position", label: "Pozíció", required: false },
   { key: "experience", label: "Tapasztalat", required: false },
   { key: "notes", label: "Megjegyzés", required: false },
