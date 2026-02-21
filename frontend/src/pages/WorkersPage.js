@@ -71,7 +71,30 @@ export default function WorkersPage() {
 
   useEffect(() => {
     fetchData();
-  }, [search, categoryFilter, typeFilter, tagFilter, ownerFilter]);
+  }, [search, categoryFilter, typeFilter, tagFilter, ownerFilter, countyFilter, positionFilter, centerLat, centerLon, radiusKm, locationEnabled]);
+
+  useEffect(() => {
+    fetchCounties();
+    fetchGeocodeStats();
+  }, []);
+
+  const fetchCounties = async () => {
+    try {
+      const res = await axios.get(`${API}/counties`);
+      setCounties(res.data);
+    } catch (e) {
+      console.error("Error fetching counties:", e);
+    }
+  };
+
+  const fetchGeocodeStats = async () => {
+    try {
+      const res = await axios.get(`${API}/workers/geocode-stats`);
+      setGeocodeStats(res.data);
+    } catch (e) {
+      console.error("Error fetching geocode stats:", e);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -81,6 +104,13 @@ export default function WorkersPage() {
       if (typeFilter) params.append("worker_type_id", typeFilter);
       if (tagFilter) params.append("tag_id", tagFilter);
       if (ownerFilter) params.append("owner_id", ownerFilter);
+      if (countyFilter) params.append("county", countyFilter);
+      if (positionFilter) params.append("position_filter", positionFilter);
+      if (locationEnabled && centerLat && centerLon) {
+        params.append("center_lat", centerLat);
+        params.append("center_lon", centerLon);
+        params.append("radius_km", radiusKm);
+      }
 
       const [workersRes, typesRes, tagsRes, projectsRes, categoriesRes] = await Promise.all([
         axios.get(`${API}/workers?${params}`),
