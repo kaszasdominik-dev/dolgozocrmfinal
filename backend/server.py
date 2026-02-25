@@ -5039,141 +5039,6 @@ async def resolve_lead_duplicate(lead_id: str, data: dict, user: dict = Depends(
 
 
 
-# ==================== APP CONFIG ====================
-
-app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-# Initialize scheduler for daily backups
-scheduler = AsyncIOScheduler()
-
-async def daily_backup_job():
-    """Daily backup job - runs at 2:00 AM"""
-    logger.info("Starting daily FTP backup job...")
-    try:
-        result = await sync_to_ftp()
-        if result.get("status") == "success":
-            logger.info(f"Daily backup completed successfully: {len(result.get('synced_files', []))} files")
-            # Store backup log
-            await db.backup_logs.insert_one({
-                "id": str(uuid.uuid4()),
-                "type": "daily_auto",
-                "status": "success",
-                "files_count": len(result.get('synced_files', [])),
-                "synced_files": result.get('synced_files', []),
-                "created_at": datetime.now(timezone.utc).isoformat()
-            })
-        else:
-            logger.warning(f"Daily backup skipped or failed: {result.get('reason', result.get('message', 'unknown'))}")
-            await db.backup_logs.insert_one({
-                "id": str(uuid.uuid4()),
-                "type": "daily_auto",
-                "status": result.get("status", "error"),
-                "message": result.get("reason", result.get("message", "")),
-                "created_at": datetime.now(timezone.utc).isoformat()
-            })
-    except Exception as e:
-        logger.error(f"Daily backup job error: {str(e)}")
-        await db.backup_logs.insert_one({
-            "id": str(uuid.uuid4()),
-            "type": "daily_auto",
-            "status": "error",
-            "message": str(e),
-            "created_at": datetime.now(timezone.utc).isoformat()
-        })
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize scheduler on startup"""
-    # Load FTP config from database
-    db_config = await db.settings.find_one({"key": "ftp_config"}, {"_id": 0})
-    if db_config and db_config.get("value"):
-        global ftp_config
-        ftp_config = db_config["value"]
-        logger.info(f"Loaded FTP config from database: {ftp_config.get('host', 'N/A')}")
-    
-    # Inicializáljuk az alapértelmezett státuszokat ha nincsenek
-    # Egységes státuszok: Feldolgozatlan, Próbára vár, Próba megbeszélve, Dolgozik, Tiltólista, Kuka (projekt szintű)
-    existing_statuses = await db.statuses.count_documents({})
-    if existing_statuses == 0:
-        default_statuses = [
-            {"name": "Feldolgozatlan", "status_type": "neutral", "color": "#9CA3AF"},
-            {"name": "Próbára vár", "status_type": "neutral", "color": "#F97316"},
-            {"name": "Próba megbeszélve", "status_type": "neutral", "color": "#8B5CF6"},
-            {"name": "Dolgozik", "status_type": "positive", "color": "#10B981"},
-            {"name": "Tiltólista", "status_type": "negative", "color": "#EF4444"},
-            {"name": "Kuka", "status_type": "negative", "color": "#6B7280"}
-        ]
-        for status_data in default_statuses:
-            await db.statuses.insert_one({
-                "id": str(uuid.uuid4()),
-                "name": status_data["name"],
-                "status_type": status_data["status_type"],
-                "color": status_data["color"],
-                "created_at": datetime.now(timezone.utc).isoformat()
-            })
-        logger.info(f"✅ {len(default_statuses)} alapértelmezett státusz létrehozva")
-    else:
-        # Ellenőrizzük, hogy a "Tiltólista" státusz létezik-e, ha nem, hozzáadjuk
-        tiltolista = await db.statuses.find_one({"name": "Tiltólista"})
-        if not tiltolista:
-            await db.statuses.insert_one({
-                "id": str(uuid.uuid4()),
-                "name": "Tiltólista",
-                "status_type": "negative",
-                "color": "#EF4444",
-                "created_at": datetime.now(timezone.utc).isoformat()
-            })
-            logger.info("✅ Tiltólista státusz hozzáadva")
-        
-        # Frissítsük a "Feldolgozás alatt" státuszt "Feldolgozatlan"-ra ha létezik
-        feldolgozas = await db.statuses.find_one({"name": "Feldolgozás alatt"})
-        if feldolgozas:
-            await db.statuses.update_one(
-                {"name": "Feldolgozás alatt"},
-                {"$set": {"name": "Feldolgozatlan", "color": "#9CA3AF"}}
-            )
-            logger.info("✅ Feldolgozás alatt → Feldolgozatlan átnevezve")
-    
-    # Alapértelmezett admin felhasználó létrehozása ha nincs
-    admin_exists = await db.users.find_one({"role": "admin"})
-    if not admin_exists:
-        admin_doc = {
-            "id": str(uuid.uuid4()),
-            "email": "admin@crm.hu",
-            "password": hash_password("Admin123!"),
-            "name": "Admin",
-            "role": "admin",
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.users.insert_one(admin_doc)
-        logger.info("✅ Alapértelmezett admin felhasználó létrehozva (admin@crm.hu / Admin123!)")
-    
-    # Schedule daily backup at 2:00 AM
-    scheduler.add_job(
-        daily_backup_job,
-        CronTrigger(hour=2, minute=0),
-        id="daily_ftp_backup",
-        replace_existing=True
-    )
-    scheduler.start()
-    logger.info("Scheduler started - Daily backup scheduled at 02:00")
-
-
-
 # ==================== DASHBOARD ENDPOINTS ====================
 
 @api_router.get("/dashboard/recruiter-stats")
@@ -5506,6 +5371,141 @@ async def get_admin_alerts(user: dict = Depends(require_admin)):
             "recruiter_id": max_recruiter_id
         }
     }
+
+# ==================== APP CONFIG ====================
+
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Initialize scheduler for daily backups
+scheduler = AsyncIOScheduler()
+
+async def daily_backup_job():
+    """Daily backup job - runs at 2:00 AM"""
+    logger.info("Starting daily FTP backup job...")
+    try:
+        result = await sync_to_ftp()
+        if result.get("status") == "success":
+            logger.info(f"Daily backup completed successfully: {len(result.get('synced_files', []))} files")
+            # Store backup log
+            await db.backup_logs.insert_one({
+                "id": str(uuid.uuid4()),
+                "type": "daily_auto",
+                "status": "success",
+                "files_count": len(result.get('synced_files', [])),
+                "synced_files": result.get('synced_files', []),
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+        else:
+            logger.warning(f"Daily backup skipped or failed: {result.get('reason', result.get('message', 'unknown'))}")
+            await db.backup_logs.insert_one({
+                "id": str(uuid.uuid4()),
+                "type": "daily_auto",
+                "status": result.get("status", "error"),
+                "message": result.get("reason", result.get("message", "")),
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+    except Exception as e:
+        logger.error(f"Daily backup job error: {str(e)}")
+        await db.backup_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "type": "daily_auto",
+            "status": "error",
+            "message": str(e),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize scheduler on startup"""
+    # Load FTP config from database
+    db_config = await db.settings.find_one({"key": "ftp_config"}, {"_id": 0})
+    if db_config and db_config.get("value"):
+        global ftp_config
+        ftp_config = db_config["value"]
+        logger.info(f"Loaded FTP config from database: {ftp_config.get('host', 'N/A')}")
+    
+    # Inicializáljuk az alapértelmezett státuszokat ha nincsenek
+    # Egységes státuszok: Feldolgozatlan, Próbára vár, Próba megbeszélve, Dolgozik, Tiltólista, Kuka (projekt szintű)
+    existing_statuses = await db.statuses.count_documents({})
+    if existing_statuses == 0:
+        default_statuses = [
+            {"name": "Feldolgozatlan", "status_type": "neutral", "color": "#9CA3AF"},
+            {"name": "Próbára vár", "status_type": "neutral", "color": "#F97316"},
+            {"name": "Próba megbeszélve", "status_type": "neutral", "color": "#8B5CF6"},
+            {"name": "Dolgozik", "status_type": "positive", "color": "#10B981"},
+            {"name": "Tiltólista", "status_type": "negative", "color": "#EF4444"},
+            {"name": "Kuka", "status_type": "negative", "color": "#6B7280"}
+        ]
+        for status_data in default_statuses:
+            await db.statuses.insert_one({
+                "id": str(uuid.uuid4()),
+                "name": status_data["name"],
+                "status_type": status_data["status_type"],
+                "color": status_data["color"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+        logger.info(f"✅ {len(default_statuses)} alapértelmezett státusz létrehozva")
+    else:
+        # Ellenőrizzük, hogy a "Tiltólista" státusz létezik-e, ha nem, hozzáadjuk
+        tiltolista = await db.statuses.find_one({"name": "Tiltólista"})
+        if not tiltolista:
+            await db.statuses.insert_one({
+                "id": str(uuid.uuid4()),
+                "name": "Tiltólista",
+                "status_type": "negative",
+                "color": "#EF4444",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+            logger.info("✅ Tiltólista státusz hozzáadva")
+        
+        # Frissítsük a "Feldolgozás alatt" státuszt "Feldolgozatlan"-ra ha létezik
+        feldolgozas = await db.statuses.find_one({"name": "Feldolgozás alatt"})
+        if feldolgozas:
+            await db.statuses.update_one(
+                {"name": "Feldolgozás alatt"},
+                {"$set": {"name": "Feldolgozatlan", "color": "#9CA3AF"}}
+            )
+            logger.info("✅ Feldolgozás alatt → Feldolgozatlan átnevezve")
+    
+    # Alapértelmezett admin felhasználó létrehozása ha nincs
+    admin_exists = await db.users.find_one({"role": "admin"})
+    if not admin_exists:
+        admin_doc = {
+            "id": str(uuid.uuid4()),
+            "email": "admin@crm.hu",
+            "password": hash_password("Admin123!"),
+            "name": "Admin",
+            "role": "admin",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.users.insert_one(admin_doc)
+        logger.info("✅ Alapértelmezett admin felhasználó létrehozva (admin@crm.hu / Admin123!)")
+    
+    # Schedule daily backup at 2:00 AM
+    scheduler.add_job(
+        daily_backup_job,
+        CronTrigger(hour=2, minute=0),
+        id="daily_ftp_backup",
+        replace_existing=True
+    )
+    scheduler.start()
+    logger.info("Scheduler started - Daily backup scheduled at 02:00")
+
+
 
 
 @app.on_event("shutdown")
