@@ -2697,15 +2697,16 @@ async def add_worker_to_project(project_id: str, data: ProjectWorkerAdd, user: d
     default_status = await db.statuses.find_one({"name": "Feldolgozatlan"}, {"_id": 0})
     status_id = data.status_id or (default_status["id"] if default_status else "")
     
-    # VALIDÁCIÓ: Kötelező pozíció választás bizonyos státuszoknál
+    # VALIDÁCIÓ: Kötelező pozíció választás projekten belül (minden státusznál KIVÉVE Kuka és Tiltólista)
     status_doc = await db.statuses.find_one({"id": status_id}, {"_id": 0})
-    status_name = status_doc["name"] if status_doc else "Feldolgozatlan"
+    status_name = status_doc["name"] if status_doc else "Próbára vár"
     
-    required_position_statuses = ["Próbára vár", "Dolgozik", "Próba megbeszélve", "Feldolgozatlan"]
-    if status_name in required_position_statuses and (not data.position_ids or len(data.position_ids) == 0):
+    # Projekten belül kötelező pozíció választani (kivéve Kuka és Tiltólista)
+    exempt_statuses = ["Kuka", "Tiltólista"]
+    if status_name not in exempt_statuses and (not data.position_ids or len(data.position_ids) == 0):
         raise HTTPException(
             status_code=400, 
-            detail=f"A '{status_name}' státuszhoz kötelező legalább egy pozíciót választani!"
+            detail=f"Projekten belül kötelező legalább egy pozíciót választani!"
         )
     
     pw_doc = {
