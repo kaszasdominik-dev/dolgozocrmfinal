@@ -2693,8 +2693,8 @@ async def add_worker_to_project(project_id: str, data: ProjectWorkerAdd, user: d
                 }
             )
     
-    # Alapértelmezett státusz: "Feldolgozatlan"
-    default_status = await db.statuses.find_one({"name": "Feldolgozatlan"}, {"_id": 0})
+    # Alapértelmezett státusz projekten belül: "Próbára vár"
+    default_status = await db.statuses.find_one({"name": "Próbára vár"}, {"_id": 0})
     status_id = data.status_id or (default_status["id"] if default_status else "")
     
     # VALIDÁCIÓ: Kötelező pozíció választás projekten belül (minden státusznál KIVÉVE Kuka és Tiltólista)
