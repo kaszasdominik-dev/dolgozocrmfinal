@@ -1134,9 +1134,12 @@ export default function ProjectDetailPage() {
           <TabsTrigger value="positions" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-3">
             <Briefcase className="w-4 h-4 mr-2" />Pozíciók ({project.positions?.length || 0})
           </TabsTrigger>
-          <TabsTrigger value="trials" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-3">
-            <TestTube className="w-4 h-4 mr-2" />Próbák ({project.trials?.length || 0})
-          </TabsTrigger>
+          {/* Próbák tab csak admin-nak */}
+          {user?.role === "admin" && (
+            <TabsTrigger value="trials" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-3">
+              <TestTube className="w-4 h-4 mr-2" />Próbák ({project.trials?.length || 0})
+            </TabsTrigger>
+          )}
           <TabsTrigger value="forms" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 py-3">
             <MessageSquare className="w-4 h-4 mr-2" />Űrlapok ({forms.length || 0})
             {formLeads.length > 0 && (
