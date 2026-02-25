@@ -5085,10 +5085,19 @@ async def get_recruiter_stats(user: dict = Depends(get_current_user)):
             "worker_id": {"$in": worker_ids}
         })
     
+    # Hozzárendelt projektek száma
+    assigned_projects = await db.projects.find({
+        "$or": [
+            {"owner_id": user["id"]},
+            {"recruiter_ids": user["id"]}
+        ]
+    }).to_list(1000)
+    
     return {
         "total_workers": len(workers),
         "status_counts": status_counts,
-        "monthly_placements": monthly_placements
+        "monthly_placements": monthly_placements,
+        "assigned_projects_count": len(assigned_projects)
     }
 
 @api_router.get("/dashboard/recruiter-monthly-performance")
