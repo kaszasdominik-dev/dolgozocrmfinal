@@ -2433,6 +2433,20 @@ async def create_trial(project_id: str, data: TrialCreate, user: dict = Depends(
     }
     await db.trials.insert_one(trial_doc)
     
+    # Értesítés küldése a projekt toborzóinak
+    recruiter_ids = project.get("recruiter_ids", [])
+    if project.get("owner_id"):
+        recruiter_ids.append(project["owner_id"])
+    
+    for recruiter_id in set(recruiter_ids):  # Unique IDs
+        await create_notification(
+            user_id=recruiter_id,
+            notification_type="trial_created",
+            title="Új próba hozzáadva",
+            message=f"Új próba lett hozzáadva a(z) '{project['name']}' projekthez. Dátum: {data.date}" + (f" {data.time}" if data.time else ""),
+            link=f"/projects/{project_id}"
+        )
+    
     return TrialResponse(**trial_doc, worker_count=0, workers=[], positions=[])
 
 @api_router.put("/projects/{project_id}/trials/{trial_id}", response_model=TrialResponse)
