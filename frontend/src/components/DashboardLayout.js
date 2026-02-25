@@ -47,7 +47,17 @@ export default function DashboardLayout() {
   useEffect(() => {
     fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
+    
+    // Hallgatjuk az értesítés frissítés event-et
+    const handleNotificationsUpdate = () => {
+      fetchUnreadCount();
+    };
+    window.addEventListener('notificationsUpdated', handleNotificationsUpdate);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('notificationsUpdated', handleNotificationsUpdate);
+    };
   }, []);
 
   // Save collapse state
