@@ -1265,18 +1265,6 @@ export default function ProjectDetailPage() {
           >
             <div className="p-3 overflow-x-auto">
               <div className="flex gap-3 min-w-max pb-4">
-                {/* Feldolgozatlan */}
-                <PipelineColumn
-                  title="Feldolgozatlan"
-                  statusName="Feldolgozatlan"
-                  workers={project.workers}
-                  color="bg-slate-500 text-white"
-                  onKuka={openKukaDialog}
-                  onOpenNotes={openStatusDialog}
-                  onEdit={openEditWorkerDialog}
-                  isOver={dropTargetStatus === "Feldolgozatlan"}
-                />
-                
                 {/* Próbára vár */}
                 <PipelineColumn
                   title="Próbára vár"
