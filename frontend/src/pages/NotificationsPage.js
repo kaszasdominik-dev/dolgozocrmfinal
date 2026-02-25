@@ -46,6 +46,8 @@ export default function NotificationsPage() {
       setNotifications(prev => 
         prev.map(n => n.id === id ? { ...n, is_read: true } : n)
       );
+      // Emit event hogy a layout frissítse a badge számot
+      window.dispatchEvent(new Event('notificationsUpdated'));
     } catch (e) {
       toast.error("Hiba történt");
     }
@@ -56,6 +58,8 @@ export default function NotificationsPage() {
       await axios.put(`${API}/notifications/read-all`);
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       toast.success("Összes értesítés olvasottként jelölve");
+      // Emit event hogy a layout frissítse a badge számot
+      window.dispatchEvent(new Event('notificationsUpdated'));
     } catch (e) {
       toast.error("Hiba történt");
     }
@@ -66,6 +70,8 @@ export default function NotificationsPage() {
       await axios.delete(`${API}/notifications/${id}`);
       setNotifications(prev => prev.filter(n => n.id !== id));
       toast.success("Értesítés törölve");
+      // Emit event hogy a layout frissítse a badge számot
+      window.dispatchEvent(new Event('notificationsUpdated'));
     } catch (e) {
       toast.error("Hiba történt");
     }
