@@ -346,7 +346,7 @@ export default function FormSettingsDialog({ open, onOpenChange, projectId, form
                         <SelectValue placeholder="-- Nincs --" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">-- Nincs --</SelectItem>
+                        <SelectItem value="none">-- Nincs --</SelectItem>
                         {positions.map(pos => (
                           <SelectItem key={pos.id} value={pos.id}>{pos.name}</SelectItem>
                         ))}
