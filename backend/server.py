@@ -2620,8 +2620,8 @@ async def add_worker_to_trial(project_id: str, trial_id: str, data: TrialWorkerA
     return {"message": "Dolgozó hozzáadva a próbához"}
 
 @api_router.put("/projects/{project_id}/trials/{trial_id}/workers/{worker_id}/position")
-async def assign_worker_to_trial_position(project_id: str, trial_id: str, worker_id: str, trial_position_id: str = "", user: dict = Depends(get_current_user)):
-    """Dolgozó pozícióhoz rendelése a próbán belül"""
+async def assign_worker_to_trial_position(project_id: str, trial_id: str, worker_id: str, trial_position_id: str = "", user: dict = Depends(require_admin)):
+    """Dolgozó pozícióhoz rendelése a próbán belül - csak admin"""
     result = await db.trial_workers.update_one(
         {"trial_id": trial_id, "worker_id": worker_id},
         {"$set": {"trial_position_id": trial_position_id}}
