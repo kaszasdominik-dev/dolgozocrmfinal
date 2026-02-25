@@ -4894,40 +4894,78 @@ async def add_lead_to_kuka(lead_id: str, data: dict, user: dict = Depends(get_cu
 
 @api_router.post("/form-leads/{lead_id}/resolve-duplicate")
 async def resolve_lead_duplicate(lead_id: str, data: dict, user: dict = Depends(get_current_user)):
-    """Resolve duplicate worker situation"""
-    action = data.get("action")  # "keep_new", "keep_existing", "merge_to_existing"
+    """
+    Duplikáció feloldása - 4 opció:
+    - keep_old: Csak régit megtartom (új ignored, régi kap badge + opcionális mezők)
+    - keep_new: Csak újat megtartom (régi archiválva, új dolgozó lesz)
+    - both: Mindkettőt megtartom
+    - merge: Összevonás (új mezők kitöltik üreseket, konfliktusoknál választás)
+    """
+    action = data.get("action")  # "keep_old", "keep_new", "both", "merge"
     existing_worker_id = data.get("existing_worker_id")
+    update_fields = data.get("update_fields", {})  # keep_old esetén
+    merge_conflicts = data.get("merge_conflicts", {})  # merge esetén
     
     lead = await db.form_leads.find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Jelentkező nem található")
     
-    if action == "keep_existing":
-        # Just mark lead as processed, do nothing else
+    old_worker = None
+    if existing_worker_id:
+        old_worker = await db.workers.find_one({"id": existing_worker_id}, {"_id": 0})
+    
+    if action == "keep_old":
+        # 1. Új lead ignored
         await db.form_leads.update_one(
             {"id": lead_id},
-            {"$set": {"status": "processed", "processed_by": user["id"], "processed_at": datetime.now(timezone.utc).isoformat()}}
+            {"$set": {"status": "ignored", "processed_by": user["id"], "processed_at": datetime.now(timezone.utc).isoformat()}}
         )
-        return {"message": "Régi dolgozó megtartva"}
+        
+        # 2. Régi dolgozó badge
+        badge_text = f"Űrlap jelentkezés: {datetime.now().strftime('%Y-%m-%d')}"
+        await db.workers.update_one(
+            {"id": existing_worker_id},
+            {"$push": {"badges": badge_text}}
+        )
+        
+        # 3. Opcionális új infók átvétele
+        if update_fields:
+            update_data = {}
+            if update_fields.get("position") and lead.get("position"):
+                update_data["position"] = lead["position"]
+            if update_fields.get("email") and lead.get("email"):
+                update_data["email"] = lead["email"]
+            if update_fields.get("notes") and lead.get("notes"):
+                existing_notes = old_worker.get("notes", "") if old_worker else ""
+                update_data["notes"] = f"{existing_notes}\n\n[Űrlap - {datetime.now().strftime('%Y-%m-%d')}]\n{lead['notes']}"
+            
+            if update_data:
+                await db.workers.update_one({"id": existing_worker_id}, {"$set": update_data})
+        
+        return {"message": "Régi dolgozó megtartva, új lead figyelmen kívül hagyva"}
     
     elif action == "keep_new":
-        # Delete existing worker and create new one from lead
+        # 1. Régi archiválás (soft delete)
         if existing_worker_id:
-            await db.workers.delete_one({"id": existing_worker_id})
-            await db.project_workers.delete_many({"worker_id": existing_worker_id})
+            await db.workers.update_one(
+                {"id": existing_worker_id},
+                {"$set": {"archived": True, "archived_at": datetime.now(timezone.utc).isoformat()}}
+            )
         
+        # 2. Új dolgozó létrehozása
         worker_type = await db.worker_types.find_one({}, {"_id": 0})
         form = await db.project_forms.find_one({"id": lead.get("form_id")}, {"_id": 0})
         
+        new_worker_id = str(uuid.uuid4())
         worker_doc = {
-            "id": str(uuid.uuid4()),
+            "id": new_worker_id,
             "name": lead.get("name", ""),
             "phone": lead.get("phone", ""),
             "address": lead.get("address", ""),
             "email": lead.get("email", ""),
             "notes": lead.get("notes", ""),
             "worker_type_id": worker_type["id"] if worker_type else "",
-            "position": "",
+            "position": lead.get("position", ""),
             "position_experience": "",
             "category": form.get("default_category", "Ingázós") if form else "Ingázós",
             "experience": "",
@@ -4938,35 +4976,64 @@ async def resolve_lead_duplicate(lead_id: str, data: dict, user: dict = Depends(
         }
         await db.workers.insert_one(worker_doc)
         
+        # 3. Lead processed
         await db.form_leads.update_one(
             {"id": lead_id},
-            {"$set": {"status": "processed", "processed_by": user["id"], "processed_at": datetime.now(timezone.utc).isoformat()}}
+            {"$set": {"status": "processed", "worker_id": new_worker_id, "processed_by": user["id"], "processed_at": datetime.now(timezone.utc).isoformat()}}
         )
-        return {"message": "Új dolgozó létrehozva, régi törölve", "worker_id": worker_doc["id"]}
-    
-    elif action == "merge_to_existing":
-        if existing_worker_id:
-            existing = await db.workers.find_one({"id": existing_worker_id}, {"_id": 0})
-            if existing:
-                form = await db.project_forms.find_one({"id": lead.get("form_id")}, {"_id": 0})
-                project = await db.projects.find_one({"id": lead.get("project_id")}, {"_id": 0})
-                
-                today = datetime.now(timezone.utc).strftime("%Y.%m.%d")
-                new_note = f"Űrlap: {form.get('name', 'Google Űrlap')} - {project.get('name', 'Projekt')} - {today}"
-                
-                existing_notes = existing.get("notes", "")
-                updated_notes = f"{existing_notes}\n---\n{new_note}" if existing_notes else new_note
-                
-                await db.workers.update_one(
-                    {"id": existing_worker_id},
-                    {"$set": {"notes": updated_notes}}
-                )
         
+        return {"message": "Új dolgozó létrehozva, régi archiválva", "worker_id": new_worker_id}
+    
+    elif action == "both":
+        # Mindkettő megtartása - lead unprocessed marad
         await db.form_leads.update_one(
             {"id": lead_id},
-            {"$set": {"status": "processed", "processed_by": user["id"], "processed_at": datetime.now(timezone.utc).isoformat()}}
+            {"$set": {"status": "unprocessed"}}
         )
-        return {"message": "Megjegyzés hozzáadva a meglévő dolgozóhoz"}
+        return {"message": "Mindkét rekord megtartva"}
+    
+    elif action == "merge":
+        # Összevonás
+        if not existing_worker_id or not old_worker:
+            raise HTTPException(status_code=400, detail="Meglévő dolgozó nem található")
+        
+        merge_data = {}
+        
+        # Konfliktusfeldolgozás
+        if merge_conflicts:
+            if merge_conflicts.get("name") == "new":
+                merge_data["name"] = lead.get("name", "")
+            
+            if merge_conflicts.get("position") == "new":
+                merge_data["position"] = lead.get("position", "")
+            elif not old_worker.get("position") and lead.get("position"):
+                merge_data["position"] = lead.get("position", "")
+            
+            if merge_conflicts.get("notes") == "merge":
+                existing_notes = old_worker.get("notes", "")
+                new_notes = lead.get("notes", "")
+                merge_data["notes"] = f"{existing_notes}\n\n[Új jelentkezés - {datetime.now().strftime('%Y-%m-%d')}]\n{new_notes}"
+            elif merge_conflicts.get("notes") == "new_only":
+                merge_data["notes"] = lead.get("notes", "")
+        
+        # Üres mezők automatikus kitöltése
+        if not old_worker.get("email") and lead.get("email"):
+            merge_data["email"] = lead.get("email", "")
+        
+        # Utolsó jelentkezés dátuma
+        merge_data["last_application_date"] = datetime.now(timezone.utc).isoformat()
+        
+        # Frissítés
+        if merge_data:
+            await db.workers.update_one({"id": existing_worker_id}, {"$set": merge_data})
+        
+        # Lead processed
+        await db.form_leads.update_one(
+            {"id": lead_id},
+            {"$set": {"status": "processed", "worker_id": existing_worker_id, "processed_by": user["id"], "processed_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        
+        return {"message": "Rekordok összevonva", "worker_id": existing_worker_id}
     
     raise HTTPException(status_code=400, detail="Érvénytelen művelet")
 
