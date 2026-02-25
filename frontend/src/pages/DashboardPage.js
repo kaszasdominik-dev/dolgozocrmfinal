@@ -240,18 +240,16 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="col-span-2 cursor-pointer hover:shadow-md transition-shadow border-2 border-green-400 dark:border-green-600 bg-green-50 dark:bg-green-900/10">
+          <Card className="col-span-2 cursor-pointer hover:shadow-md transition-shadow border-2 border-primary/30 bg-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Havi placements</p>
-                  <p className="text-3xl font-bold text-green-600 dark:text-green-400">{recruiterStats.monthly_placements}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {new Date().toLocaleDateString('hu-HU', { month: 'long', year: 'numeric' })}
-                  </p>
+                  <p className="text-sm text-muted-foreground">Projektek száma</p>
+                  <p className="text-3xl font-bold text-primary">{recruiterStats.assigned_projects_count || 0}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Hozzám rendelt projektek</p>
                 </div>
-                <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
-                  <TrendingUp className="w-6 h-6 text-green-600" />
+                <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center">
+                  <FolderKanban className="w-6 h-6 text-primary" />
                 </div>
               </div>
             </CardContent>
