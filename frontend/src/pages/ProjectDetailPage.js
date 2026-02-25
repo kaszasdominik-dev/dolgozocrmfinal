@@ -1826,7 +1826,6 @@ export default function ProjectDetailPage() {
               </div>
             )}
           </TabsContent>
-        )}
         
         {/* Waitlist Tab */}
         <TabsContent value="waitlist" className="p-0 mt-0">
