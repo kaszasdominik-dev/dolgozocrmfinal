@@ -2631,8 +2631,8 @@ async def assign_worker_to_trial_position(project_id: str, trial_id: str, worker
     return {"message": "Pozíció frissítve"}
 
 @api_router.delete("/projects/{project_id}/trials/{trial_id}/workers/{worker_id}")
-async def remove_worker_from_trial(project_id: str, trial_id: str, worker_id: str, user: dict = Depends(get_current_user)):
-    """Dolgozó eltávolítása próbáról"""
+async def remove_worker_from_trial(project_id: str, trial_id: str, worker_id: str, user: dict = Depends(require_admin)):
+    """Dolgozó eltávolítása próbáról - csak admin"""
     result = await db.trial_workers.delete_one({
         "trial_id": trial_id,
         "worker_id": worker_id
