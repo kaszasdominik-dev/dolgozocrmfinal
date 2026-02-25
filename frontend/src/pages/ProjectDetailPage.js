@@ -1712,9 +1712,11 @@ export default function ProjectDetailPage() {
                             <Copy className="w-3 h-3 mr-1" />Másolás ({trial.workers.length})
                           </Button>
                         )}
-                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openAddToTrialDialog(trial.id)}>
-                          <Plus className="w-3 h-3 mr-1" />Dolgozó
-                        </Button>
+                        {user?.role === "admin" && (
+                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openAddToTrialDialog(trial.id)}>
+                            <Plus className="w-3 h-3 mr-1" />Dolgozó
+                          </Button>
+                        )}
                         {user?.role === "admin" && (
                           <>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openTrialDialog(trial)}>
