@@ -1666,167 +1666,170 @@ export default function ProjectDetailPage() {
         </TabsContent>
 
         {/* Trials Tab */}
-        <TabsContent value="trials" className="p-0 mt-0">
-          <div className="p-3 border-b border-border flex items-center justify-between">
-            <span className="font-semibold text-sm text-foreground">Próbák kezelése</span>
-            <Button variant="outline" size="sm" onClick={() => openTrialDialog()} data-testid="add-trial-btn">
-              <Plus className="w-4 h-4 mr-1" />Új próba
-            </Button>
-          </div>
-
-          {project.trials?.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <TestTube className="w-12 h-12 mx-auto mb-2 text-muted-foreground/50" />
-              <p>Még nincs próba létrehozva</p>
-              <Button variant="outline" size="sm" className="mt-2" onClick={() => openTrialDialog()}>
-                <Plus className="w-4 h-4 mr-1" />Első próba létrehozása
+        {/* Próbák tab content - csak admin */}
+        {user?.role === "admin" && (
+          <TabsContent value="trials" className="p-0 mt-0">
+            <div className="p-3 border-b border-border flex items-center justify-between">
+              <span className="font-semibold text-sm text-foreground">Próbák kezelése</span>
+              <Button variant="outline" size="sm" onClick={() => openTrialDialog()} data-testid="add-trial-btn">
+                <Plus className="w-4 h-4 mr-1" />Új próba
               </Button>
             </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {project.trials?.map(trial => (
-                <div key={trial.id} className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-primary" />
-                        <span className="font-semibold text-foreground">
-                          {new Date(trial.date).toLocaleDateString('hu-HU')}
-                          {trial.time && <span className="ml-1 text-muted-foreground font-normal">({trial.time})</span>}
-                        </span>
+
+            {project.trials?.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground">
+                <TestTube className="w-12 h-12 mx-auto mb-2 text-muted-foreground/50" />
+                <p>Még nincs próba létrehozva</p>
+                <Button variant="outline" size="sm" className="mt-2" onClick={() => openTrialDialog()}>
+                  <Plus className="w-4 h-4 mr-1" />Első próba létrehozása
+                </Button>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {project.trials?.map(trial => (
+                  <div key={trial.id} className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-primary" />
+                          <span className="font-semibold text-foreground">
+                            {new Date(trial.date).toLocaleDateString('hu-HU')}
+                            {trial.time && <span className="ml-1 text-muted-foreground font-normal">({trial.time})</span>}
+                          </span>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">{trial.worker_count || trial.workers?.length || 0} dolgozó</Badge>
                       </div>
-                      <Badge variant="secondary" className="text-xs">{trial.worker_count || trial.workers?.length || 0} dolgozó</Badge>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {trial.workers && trial.workers.length > 0 && (
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-7 text-xs" 
-                          onClick={() => openCopyDialog(trial)}
-                          data-testid="copy-trial-workers"
-                        >
-                          <Copy className="w-3 h-3 mr-1" />Másolás ({trial.workers.length})
-                        </Button>
-                      )}
-                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openAddToTrialDialog(trial.id)}>
-                        <Plus className="w-3 h-3 mr-1" />Dolgozó
-                      </Button>
-                      {user?.role === "admin" && (
-                        <>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openTrialDialog(trial)}>
-                            <Edit2 className="w-3 h-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteTrial(trial.id)}>
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {trial.notes && <p className="text-sm text-muted-foreground mb-2">{trial.notes}</p>}
-                  
-                  {/* Trial Positions */}
-                  <div className="mt-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-foreground">Pozíciók</span>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 text-xs"
-                        onClick={() => openTrialPositionDialog(trial)}
-                      >
-                        <Plus className="w-3 h-3 mr-1" />Pozíció
-                      </Button>
-                    </div>
-                    
-                    {trial.positions && trial.positions.length > 0 ? (
-                      <div className="grid gap-2">
-                        {trial.positions.map(pos => (
-                          <div 
-                            key={pos.id} 
-                            className="flex items-center justify-between p-2 bg-muted/50 rounded-lg border border-border"
+                      <div className="flex items-center gap-1">
+                        {trial.workers && trial.workers.length > 0 && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-7 text-xs" 
+                            onClick={() => openCopyDialog(trial)}
+                            data-testid="copy-trial-workers"
                           >
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <Briefcase className="w-4 h-4 text-primary shrink-0" />
-                                <span className="font-medium text-sm">{pos.position_name}</span>
-                                <Badge variant="outline" className={`text-xs ${
-                                  pos.assigned_count >= pos.headcount 
-                                    ? "bg-green-500/20 text-green-600" 
-                                    : "bg-orange-500/20 text-orange-600"
-                                }`}>
-                                  {pos.assigned_count}/{pos.headcount} fő
-                                </Badge>
-                                {pos.hourly_rate && (
-                                  <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600">
-                                    Nettó: {pos.hourly_rate} Ft/óra
+                            <Copy className="w-3 h-3 mr-1" />Másolás ({trial.workers.length})
+                          </Button>
+                        )}
+                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openAddToTrialDialog(trial.id)}>
+                          <Plus className="w-3 h-3 mr-1" />Dolgozó
+                        </Button>
+                        {user?.role === "admin" && (
+                          <>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openTrialDialog(trial)}>
+                              <Edit2 className="w-3 h-3" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteTrial(trial.id)}>
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {trial.notes && <p className="text-sm text-muted-foreground mb-2">{trial.notes}</p>}
+                    
+                    {/* Trial Positions */}
+                    <div className="mt-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-foreground">Pozíciók</span>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 text-xs"
+                          onClick={() => openTrialPositionDialog(trial)}
+                        >
+                          <Plus className="w-3 h-3 mr-1" />Pozíció
+                        </Button>
+                      </div>
+                      
+                      {trial.positions && trial.positions.length > 0 ? (
+                        <div className="grid gap-2">
+                          {trial.positions.map(pos => (
+                            <div 
+                              key={pos.id} 
+                              className="flex items-center justify-between p-2 bg-muted/50 rounded-lg border border-border"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Briefcase className="w-4 h-4 text-primary shrink-0" />
+                                  <span className="font-medium text-sm">{pos.position_name}</span>
+                                  <Badge variant="outline" className={`text-xs ${
+                                    pos.assigned_count >= pos.headcount 
+                                      ? "bg-green-500/20 text-green-600" 
+                                      : "bg-orange-500/20 text-orange-600"
+                                  }`}>
+                                    {pos.assigned_count}/{pos.headcount} fő
                                   </Badge>
-                                )}
-                                {pos.accommodation && (
-                                  <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-600">
-                                    Szállás ✓
-                                  </Badge>
+                                  {pos.hourly_rate && (
+                                    <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600">
+                                      Nettó: {pos.hourly_rate} Ft/óra
+                                    </Badge>
+                                  )}
+                                  {pos.accommodation && (
+                                    <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-600">
+                                      Szállás ✓
+                                    </Badge>
+                                  )}
+                                </div>
+                                {pos.requirements && (
+                                  <p className="text-xs text-muted-foreground mt-1 ml-6">{pos.requirements}</p>
                                 )}
                               </div>
-                              {pos.requirements && (
-                                <p className="text-xs text-muted-foreground mt-1 ml-6">{pos.requirements}</p>
-                              )}
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="h-6 text-xs"
+                                  onClick={() => openAddToTrialDialog(trial.id, pos.id)}
+                                >
+                                  <UserPlus className="w-3 h-3 mr-1" />Dolgozó
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-6 w-6"
+                                  onClick={() => openTrialPositionDialog(trial, pos)}
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                </Button>
+                                <Button 
+                                  variant="ghost"
+                                  size="icon" 
+                                  className="h-6 w-6 text-destructive"
+                                  onClick={() => handleDeleteTrialPosition(trial.id, pos.id)}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="h-6 text-xs"
-                                onClick={() => openAddToTrialDialog(trial.id, pos.id)}
-                              >
-                                <UserPlus className="w-3 h-3 mr-1" />Dolgozó
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6"
-                                onClick={() => openTrialPositionDialog(trial, pos)}
-                              >
-                                <Edit2 className="w-3 h-3" />
-                              </Button>
-                              <Button 
-                                variant="ghost"
-                                size="icon" 
-                                className="h-6 w-6 text-destructive"
-                                onClick={() => handleDeleteTrialPosition(trial.id, pos.id)}
-                              >
-                                <X className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">Még nincs pozíció megadva</p>
+                      )}
+                    </div>
+                    
+                    {/* Trial Workers */}
+                    {trial.workers && trial.workers.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-border">
+                        <span className="text-xs text-muted-foreground w-full mb-1">Beosztott dolgozók:</span>
+                        {trial.workers.map(w => (
+                          <Badge key={w.id} variant="outline" className="gap-1 pr-1">
+                            {w.name}
+                            {w.position_name && <span className="text-muted-foreground">({w.position_name})</span>}
+                            <button onClick={() => handleRemoveWorkerFromTrial(trial.id, w.id)} className="hover:bg-muted rounded ml-1">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </Badge>
                         ))}
                       </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">Még nincs pozíció megadva</p>
                     )}
                   </div>
-                  
-                  {/* Trial Workers */}
-                  {trial.workers && trial.workers.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-border">
-                      <span className="text-xs text-muted-foreground w-full mb-1">Beosztott dolgozók:</span>
-                      {trial.workers.map(w => (
-                        <Badge key={w.id} variant="outline" className="gap-1 pr-1">
-                          {w.name}
-                          {w.position_name && <span className="text-muted-foreground">({w.position_name})</span>}
-                          <button onClick={() => handleRemoveWorkerFromTrial(trial.id, w.id)} className="hover:bg-muted rounded ml-1">
-                            <X className="w-3 h-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </TabsContent>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        )}
         
         {/* Waitlist Tab */}
         <TabsContent value="waitlist" className="p-0 mt-0">
