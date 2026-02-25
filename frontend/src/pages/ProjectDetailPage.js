@@ -1781,30 +1781,34 @@ export default function ProjectDetailPage() {
                                 )}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  className="h-6 text-xs"
-                                  onClick={() => openAddToTrialDialog(trial.id, pos.id)}
-                                >
-                                  <UserPlus className="w-3 h-3 mr-1" />Dolgozó
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-6 w-6"
-                                  onClick={() => openTrialPositionDialog(trial, pos)}
-                                >
-                                  <Edit2 className="w-3 h-3" />
-                                </Button>
-                                <Button 
-                                  variant="ghost"
-                                  size="icon" 
-                                  className="h-6 w-6 text-destructive"
-                                  onClick={() => handleDeleteTrialPosition(trial.id, pos.id)}
-                                >
-                                  <X className="w-3 h-3" />
-                                </Button>
+                                {user?.role === "admin" && (
+                                  <>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="h-6 text-xs"
+                                      onClick={() => openAddToTrialDialog(trial.id, pos.id)}
+                                    >
+                                      <UserPlus className="w-3 h-3 mr-1" />Dolgozó
+                                    </Button>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-6 w-6"
+                                      onClick={() => openTrialPositionDialog(trial, pos)}
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                    </Button>
+                                    <Button 
+                                      variant="ghost"
+                                      size="icon" 
+                                      className="h-6 w-6 text-destructive"
+                                      onClick={() => handleDeleteTrialPosition(trial.id, pos.id)}
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           ))}
