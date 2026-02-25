@@ -2578,8 +2578,8 @@ async def delete_trial_position(project_id: str, trial_id: str, position_id: str
 # ==================== TRIAL WORKERS ====================
 
 @api_router.post("/projects/{project_id}/trials/{trial_id}/workers")
-async def add_worker_to_trial(project_id: str, trial_id: str, data: TrialWorkerAdd, user: dict = Depends(get_current_user)):
-    """Dolgozó hozzáadása próbához"""
+async def add_worker_to_trial(project_id: str, trial_id: str, data: TrialWorkerAdd, user: dict = Depends(require_admin)):
+    """Dolgozó hozzáadása próbához - csak admin"""
     trial = await db.trials.find_one({"id": trial_id, "project_id": project_id}, {"_id": 0})
     if not trial:
         raise HTTPException(status_code=404, detail="Próba nem található")
