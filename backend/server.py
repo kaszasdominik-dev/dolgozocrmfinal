@@ -2014,7 +2014,8 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
         "training_location": p.get("training_location", ""),
         "notes": p.get("notes", ""),
         "is_closed": p.get("is_closed", False),
-        "worker_count": total_count,
+        "total_count": total_count,  # Toborzó csak saját dolgozóit látja
+        "worker_count": total_count,  # Backward compatibility
         "total_headcount": total_headcount,
         "recruiter_ids": recruiter_ids,
         "recruiters": recruiters,
