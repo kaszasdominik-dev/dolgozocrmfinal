@@ -5105,6 +5105,342 @@ async def startup_event():
     scheduler.start()
     logger.info("Scheduler started - Daily backup scheduled at 02:00")
 
+
+
+# ==================== DASHBOARD ENDPOINTS ====================
+
+@api_router.get("/dashboard/recruiter-stats")
+async def get_recruiter_stats(user: dict = Depends(get_current_user)):
+    """Toborzó saját statisztikái"""
+    
+    # Saját dolgozók lekérése
+    workers = await db.workers.find({"owner_id": user["id"]}).to_list(10000)
+    
+    # Státusz szerinti csoportosítás
+    status_counts = {
+        "Feldolgozatlan": 0,
+        "Próbára vár": 0,
+        "Próba megbeszélve": 0,
+        "Dolgozik": 0,
+        "Tiltólista": 0
+    }
+    
+    for w in workers:
+        status = w.get("global_status", "Feldolgozatlan")
+        if status in status_counts:
+            status_counts[status] += 1
+    
+    # Havi placements (Dolgozik státuszba kerültek ebben a hónapban)
+    this_month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0)
+    
+    # Dolgozik státusz ID-k
+    dolgozik_statuses = await db.statuses.find({"name": "Dolgozik"}).to_list(100)
+    dolgozik_status_ids = [s["id"] for s in dolgozik_statuses]
+    
+    worker_ids = [w["id"] for w in workers]
+    
+    monthly_placements = 0
+    if dolgozik_status_ids and worker_ids:
+        monthly_placements = await db.project_workers.count_documents({
+            "status_id": {"$in": dolgozik_status_ids},
+            "updated_at": {"$gte": this_month_start.isoformat()},
+            "worker_id": {"$in": worker_ids}
+        })
+    
+    return {
+        "total_workers": len(workers),
+        "status_counts": status_counts,
+        "monthly_placements": monthly_placements
+    }
+
+@api_router.get("/dashboard/recruiter-monthly-performance")
+async def get_recruiter_monthly_performance(user: dict = Depends(get_current_user)):
+    """Toborzó havi placements az elmúlt 6 hónapra"""
+    
+    # Saját dolgozók ID-i
+    workers = await db.workers.find({"owner_id": user["id"]}, {"_id": 0, "id": 1}).to_list(10000)
+    worker_ids = [w["id"] for w in workers]
+    
+    # Dolgozik státusz ID-k
+    dolgozik_statuses = await db.statuses.find({"name": "Dolgozik"}).to_list(100)
+    dolgozik_status_ids = [s["id"] for s in dolgozik_statuses]
+    
+    # Elmúlt 6 hónap
+    monthly_data = []
+    for i in range(5, -1, -1):
+        month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0) - timedelta(days=30*i)
+        # Következő hónap első napja
+        if month_start.month == 12:
+            month_end = month_start.replace(year=month_start.year + 1, month=1, day=1) - timedelta(seconds=1)
+        else:
+            month_end = month_start.replace(month=month_start.month + 1, day=1) - timedelta(seconds=1)
+        
+        # Placements ebben a hónapban
+        placements = 0
+        if dolgozik_status_ids and worker_ids:
+            placements = await db.project_workers.count_documents({
+                "worker_id": {"$in": worker_ids},
+                "status_id": {"$in": dolgozik_status_ids},
+                "updated_at": {"$gte": month_start.isoformat(), "$lte": month_end.isoformat()}
+            })
+        
+        monthly_data.append({
+            "month": month_start.strftime("%Y-%m"),
+            "month_name": month_start.strftime("%B"),
+            "placements": placements
+        })
+    
+    return monthly_data
+
+@api_router.get("/dashboard/recruiter-todos")
+async def get_recruiter_todos(user: dict = Depends(get_current_user)):
+    """Toborzó teendői"""
+    
+    # Saját projektek
+    my_projects = await db.projects.find({
+        "$or": [
+            {"recruiter_ids": user["id"]},
+            {"owner_id": user["id"]}
+        ]
+    }).to_list(100)
+    my_project_ids = [p["id"] for p in my_projects]
+    
+    # Új feldolgozatlan leadek
+    unprocessed_leads = 0
+    if my_project_ids:
+        unprocessed_leads = await db.form_leads.count_documents({
+            "project_id": {"$in": my_project_ids},
+            "status": "unprocessed"
+        })
+    
+    # Közelgő próbák (7 napon belül)
+    week_from_now = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    upcoming_trials = []
+    if my_project_ids:
+        upcoming_trials = await db.trials.find({
+            "project_id": {"$in": my_project_ids},
+            "date": {"$gte": datetime.now(timezone.utc).isoformat(), "$lte": week_from_now}
+        }).to_list(100)
+    
+    # Régi feldolgozatlan dolgozók (60+ napja)
+    days_60_ago = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+    stale_workers_60plus = await db.workers.count_documents({
+        "owner_id": user["id"],
+        "global_status": "Feldolgozatlan",
+        "created_at": {"$lte": days_60_ago}
+    })
+    
+    return {
+        "unprocessed_leads": unprocessed_leads,
+        "upcoming_trials": upcoming_trials,
+        "stale_workers_60plus": stale_workers_60plus
+    }
+
+@api_router.get("/dashboard/admin-stats")
+async def get_admin_stats(user: dict = Depends(require_admin)):
+    """Admin - teljes cég statisztikái"""
+    
+    # Összes dolgozó
+    all_workers = await db.workers.find({}).to_list(10000)
+    
+    # Státusz szerinti csoportosítás
+    status_counts = {
+        "Feldolgozatlan": 0,
+        "Próbára vár": 0,
+        "Próba megbeszélve": 0,
+        "Dolgozik": 0,
+        "Tiltólista": 0
+    }
+    
+    for w in all_workers:
+        status = w.get("global_status", "Feldolgozatlan")
+        if status in status_counts:
+            status_counts[status] += 1
+    
+    return {
+        "total_workers": len(all_workers),
+        "status_counts": status_counts
+    }
+
+@api_router.get("/dashboard/admin-recruiter-performance")
+async def get_admin_recruiter_performance(user: dict = Depends(require_admin)):
+    """Admin - toborzók teljesítménye"""
+    
+    # Összes toborzó
+    recruiters = await db.users.find({"role": "user"}).to_list(100)
+    
+    # Dolgozik státusz ID-k
+    dolgozik_statuses = await db.statuses.find({"name": "Dolgozik"}).to_list(100)
+    dolgozik_status_ids = [s["id"] for s in dolgozik_statuses]
+    
+    performance = []
+    for recruiter in recruiters:
+        # Dolgozók száma
+        workers = await db.workers.find({"owner_id": recruiter["id"]}).to_list(10000)
+        
+        # Státusz szerinti bontás
+        status_counts = {
+            "Feldolgozatlan": 0,
+            "Próbára vár": 0,
+            "Próba megbeszélve": 0,
+            "Dolgozik": 0,
+            "Tiltólista": 0
+        }
+        
+        for w in workers:
+            status = w.get("global_status", "Feldolgozatlan")
+            if status in status_counts:
+                status_counts[status] += 1
+        
+        # Havi placements (ebben a hónapban)
+        this_month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0)
+        worker_ids = [w["id"] for w in workers]
+        
+        monthly_placements = 0
+        if dolgozik_status_ids and worker_ids:
+            monthly_placements = await db.project_workers.count_documents({
+                "worker_id": {"$in": worker_ids},
+                "status_id": {"$in": dolgozik_status_ids},
+                "updated_at": {"$gte": this_month_start.isoformat()}
+            })
+        
+        # Átlagos átfutás (created_at → Dolgozik státusz updated_at)
+        avg_days = 0
+        dolgozik_workers = [w for w in workers if w.get("global_status") == "Dolgozik"]
+        if dolgozik_workers:
+            total_days = 0
+            count = 0
+            for w in dolgozik_workers:
+                pw = await db.project_workers.find_one({
+                    "worker_id": w["id"],
+                    "status_id": {"$in": dolgozik_status_ids}
+                })
+                if pw and w.get("created_at") and pw.get("updated_at"):
+                    try:
+                        created = datetime.fromisoformat(w["created_at"].replace('Z', '+00:00'))
+                        updated = datetime.fromisoformat(pw["updated_at"].replace('Z', '+00:00'))
+                        days = (updated - created).days
+                        if days >= 0:
+                            total_days += days
+                            count += 1
+                    except:
+                        pass
+            
+            if count > 0:
+                avg_days = int(total_days / count)
+        
+        performance.append({
+            "recruiter_name": recruiter.get("name") or recruiter["email"],
+            "recruiter_id": recruiter["id"],
+            "total_workers": len(workers),
+            "feldolgozatlan": status_counts["Feldolgozatlan"],
+            "probara_var": status_counts["Próbára vár"],
+            "proba_megbeszeve": status_counts["Próba megbeszélve"],
+            "dolgozik": status_counts["Dolgozik"],
+            "tiltolista": status_counts["Tiltólista"],
+            "monthly_placements": monthly_placements,
+            "avg_conversion_days": avg_days
+        })
+    
+    return performance
+
+@api_router.get("/dashboard/admin-monthly-trend")
+async def get_admin_monthly_trend(user: dict = Depends(require_admin)):
+    """Admin - cég teljes havi trendje (elmúlt 6 hónap)"""
+    
+    dolgozik_statuses = await db.statuses.find({"name": "Dolgozik"}).to_list(100)
+    dolgozik_status_ids = [s["id"] for s in dolgozik_statuses]
+    
+    monthly_data = []
+    for i in range(5, -1, -1):
+        month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0) - timedelta(days=30*i)
+        # Következő hónap első napja
+        if month_start.month == 12:
+            month_end = month_start.replace(year=month_start.year + 1, month=1, day=1) - timedelta(seconds=1)
+        else:
+            month_end = month_start.replace(month=month_start.month + 1, day=1) - timedelta(seconds=1)
+        
+        # Felvitt dolgozók ebben a hónapban
+        added_workers = await db.workers.count_documents({
+            "created_at": {"$gte": month_start.isoformat(), "$lte": month_end.isoformat()}
+        })
+        
+        # Placements ebben a hónapban
+        placements = 0
+        if dolgozik_status_ids:
+            placements = await db.project_workers.count_documents({
+                "status_id": {"$in": dolgozik_status_ids},
+                "updated_at": {"$gte": month_start.isoformat(), "$lte": month_end.isoformat()}
+            })
+        
+        monthly_data.append({
+            "month": month_start.strftime("%Y-%m"),
+            "month_name": month_start.strftime("%B"),
+            "added_workers": added_workers,
+            "placements": placements
+        })
+    
+    return monthly_data
+
+@api_router.get("/dashboard/admin-alerts")
+async def get_admin_alerts(user: dict = Depends(require_admin)):
+    """Admin - kritikus figyelmeztetések"""
+    
+    # 90+ napja feldolgozatlan dolgozók
+    days_90_ago = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
+    stale_workers_90plus = await db.workers.count_documents({
+        "global_status": "Feldolgozatlan",
+        "created_at": {"$lte": days_90_ago}
+    })
+    
+    # Próba megbeszélve státusz ID
+    proba_statuses = await db.statuses.find({"name": "Próba megbeszélve"}).to_list(100)
+    proba_status_ids = [s["id"] for s in proba_statuses]
+    
+    # Próba megbeszélve, de 48+ órája változatlan
+    two_days_ago = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    stale_trials = 0
+    if proba_status_ids:
+        stale_trials = await db.project_workers.count_documents({
+            "status_id": {"$in": proba_status_ids},
+            "updated_at": {"$lte": two_days_ago}
+        })
+    
+    # Új tiltólistások (elmúlt 7 nap)
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    new_blacklist = await db.workers.count_documents({
+        "global_status": "Tiltólista",
+        "created_at": {"$gte": week_ago}
+    })
+    
+    # Legtöbb feldolgozatlan toborzó
+    recruiters = await db.users.find({"role": "user"}).to_list(100)
+    max_feldolgozatlan = 0
+    max_recruiter_name = ""
+    max_recruiter_id = ""
+    
+    for r in recruiters:
+        count = await db.workers.count_documents({
+            "owner_id": r["id"],
+            "global_status": "Feldolgozatlan"
+        })
+        if count > max_feldolgozatlan:
+            max_feldolgozatlan = count
+            max_recruiter_name = r.get("name") or r["email"]
+            max_recruiter_id = r["id"]
+    
+    return {
+        "stale_workers_90plus": stale_workers_90plus,
+        "stale_trials": stale_trials,
+        "new_blacklist": new_blacklist,
+        "top_feldolgozatlan": {
+            "name": max_recruiter_name,
+            "count": max_feldolgozatlan,
+            "recruiter_id": max_recruiter_id
+        }
+    }
+
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     scheduler.shutdown()
