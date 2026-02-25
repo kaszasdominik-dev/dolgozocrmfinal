@@ -2561,8 +2561,8 @@ async def update_trial_position(project_id: str, trial_id: str, position_id: str
     return TrialPositionResponse(**updated, assigned_count=assigned)
 
 @api_router.delete("/projects/{project_id}/trials/{trial_id}/positions/{position_id}")
-async def delete_trial_position(project_id: str, trial_id: str, position_id: str, user: dict = Depends(get_current_user)):
-    """Próba pozíció törlése"""
+async def delete_trial_position(project_id: str, trial_id: str, position_id: str, user: dict = Depends(require_admin)):
+    """Próba pozíció törlése - csak admin"""
     result = await db.trial_positions.delete_one({"id": position_id, "trial_id": trial_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Pozíció nem található")
