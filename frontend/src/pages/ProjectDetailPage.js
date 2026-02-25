@@ -1679,9 +1679,11 @@ export default function ProjectDetailPage() {
               <div className="p-8 text-center text-muted-foreground">
                 <TestTube className="w-12 h-12 mx-auto mb-2 text-muted-foreground/50" />
                 <p>Még nincs próba létrehozva</p>
-                <Button variant="outline" size="sm" className="mt-2" onClick={() => openTrialDialog()}>
-                  <Plus className="w-4 h-4 mr-1" />Első próba létrehozása
-                </Button>
+                {user?.role === "admin" && (
+                  <Button variant="outline" size="sm" className="mt-2" onClick={() => openTrialDialog()}>
+                    <Plus className="w-4 h-4 mr-1" />Első próba létrehozása
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="divide-y divide-border">
