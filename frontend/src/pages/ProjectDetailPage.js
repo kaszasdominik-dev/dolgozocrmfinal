@@ -1735,14 +1735,16 @@ export default function ProjectDetailPage() {
                     <div className="mt-3 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-foreground">Pozíciók</span>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-6 text-xs"
-                          onClick={() => openTrialPositionDialog(trial)}
-                        >
-                          <Plus className="w-3 h-3 mr-1" />Pozíció
-                        </Button>
+                        {user?.role === "admin" && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 text-xs"
+                            onClick={() => openTrialPositionDialog(trial)}
+                          >
+                            <Plus className="w-3 h-3 mr-1" />Pozíció
+                          </Button>
+                        )}
                       </div>
                       
                       {trial.positions && trial.positions.length > 0 ? (
