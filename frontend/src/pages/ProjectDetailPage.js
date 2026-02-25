@@ -375,19 +375,27 @@ export default function ProjectDetailPage() {
 
   // Dolgozó hozzáadása választott státusszal
   const handleAddWorkerWithStatus = async (workerId, forceAdd = false) => {
+    // Validáció: kötelező pozíció választás
+    if (selectedPositionIds.length === 0) {
+      toast.error("Legalább 1 pozíciót kötelező választani!");
+      return;
+    }
+
     try {
-      // Először hozzáadjuk
+      // Státusz ID lekérése
+      const statusObj = statuses.find(s => s.name === addWorkerStatus);
+      
+      // Dolgozó hozzáadása pozíciókkal
       await axios.post(`${API}/projects/${id}/workers`, { 
         worker_id: workerId,
+        status_id: statusObj?.id,
+        position_ids: selectedPositionIds,  // Többszörös pozíció
         force_add: forceAdd
       });
       
-      // Majd beállítjuk a státuszt ha nem "Feldolgozatlan"
-      if (addWorkerStatus !== "Feldolgozatlan") {
-        await handleStatusChangeWithValidation(workerId, addWorkerStatus);
-      }
-      
       toast.success(`Hozzáadva: ${addWorkerStatus}`);
+      setSelectedPositionIds([]);  // Reset pozíciók
+      setWorkerSearchQuery("");  // Reset keresés
       fetchData();
     } catch (e) {
       if (e.response?.status === 409 && e.response?.data?.detail?.type === "kuka_warning") {
@@ -399,7 +407,7 @@ export default function ProjectDetailPage() {
           handleAddWorkerWithStatus(workerId, true);
         }
       } else {
-        toast.error(e.response?.data?.detail || "Hiba");
+        toast.error(e.response?.data?.detail || "Hiba a hozzáadáskor");
       }
     }
   };
