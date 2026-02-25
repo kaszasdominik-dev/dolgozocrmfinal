@@ -1826,9 +1826,11 @@ export default function ProjectDetailPage() {
                           <Badge key={w.id} variant="outline" className="gap-1 pr-1">
                             {w.name}
                             {w.position_name && <span className="text-muted-foreground">({w.position_name})</span>}
-                            <button onClick={() => handleRemoveWorkerFromTrial(trial.id, w.id)} className="hover:bg-muted rounded ml-1">
-                              <X className="w-3 h-3" />
-                            </button>
+                            {user?.role === "admin" && (
+                              <button onClick={() => handleRemoveWorkerFromTrial(trial.id, w.id)} className="hover:bg-muted rounded ml-1">
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
                           </Badge>
                         ))}
                       </div>
