@@ -1940,7 +1940,12 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
                 "position_names": position_names
             })
     
-    total_count = await db.project_workers.count_documents({"project_id": project_id})
+    # Total count - toborzó csak saját dolgozóit számolja
+    if user["role"] == "admin":
+        total_count = await db.project_workers.count_documents({"project_id": project_id})
+    else:
+        # Toborzó: csak saját dolgozók számolása
+        total_count = len(workers)
     
     # Get positions
     positions = await db.project_positions.find({"project_id": project_id}, {"_id": 0}).to_list(100)
