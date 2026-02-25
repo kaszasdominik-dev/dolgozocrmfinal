@@ -1664,9 +1664,8 @@ export default function ProjectDetailPage() {
         </TabsContent>
 
         {/* Trials Tab */}
-        {/* Próbák tab content - csak admin */}
-        {user?.role === "admin" && (
-          <TabsContent value="trials" className="p-0 mt-0">
+        {/* Próbák tab content - mindenki látja (csak admin szerkeszthet) */}
+        <TabsContent value="trials" className="p-0 mt-0">
             <div className="p-3 border-b border-border flex items-center justify-between">
               <span className="font-semibold text-sm text-foreground">Próbák kezelése</span>
               <Button variant="outline" size="sm" onClick={() => openTrialDialog()} data-testid="add-trial-btn">
