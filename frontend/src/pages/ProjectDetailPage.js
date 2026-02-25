@@ -992,6 +992,17 @@ export default function ProjectDetailPage() {
   // Szűrjük a "Dolgozik" státuszú dolgozókat
   const activeWorkers = project.workers?.filter(w => w.status_name === "Dolgozik") || [];
 
+  // Szűrt dolgozók (keresés alapján)
+  const filteredAvailableWorkers = availableWorkers.filter(w => {
+    if (!workerSearchQuery) return true;
+    const query = workerSearchQuery.toLowerCase();
+    return (
+      w.name?.toLowerCase().includes(query) ||
+      w.phone?.includes(query) ||
+      w.position?.toLowerCase().includes(query)
+    );
+  });
+
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       {/* Header */}
