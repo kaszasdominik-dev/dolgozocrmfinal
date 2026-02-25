@@ -1186,10 +1186,10 @@ export default function ProjectDetailPage() {
                     project.positions.map(pos => (
                       <div 
                         key={pos.id}
-                        className={`cursor-pointer px-3 py-1.5 rounded-md text-sm transition-colors ${
+                        className={`cursor-pointer px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                           selectedPositionIds.includes(pos.id) 
-                            ? 'bg-primary text-white' 
-                            : 'bg-muted hover:bg-muted/80'
+                            ? 'bg-primary text-primary-foreground shadow-sm' 
+                            : 'bg-muted text-foreground hover:bg-muted/80'
                         }`}
                         onClick={() => {
                           setSelectedPositionIds(prev => 
