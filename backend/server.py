@@ -2535,8 +2535,8 @@ async def add_trial_position(project_id: str, trial_id: str, data: TrialPosition
     return TrialPositionResponse(**trial_pos_doc, assigned_count=0)
 
 @api_router.put("/projects/{project_id}/trials/{trial_id}/positions/{position_id}")
-async def update_trial_position(project_id: str, trial_id: str, position_id: str, data: TrialPositionUpdate, user: dict = Depends(get_current_user)):
-    """Próba pozíció szerkesztése"""
+async def update_trial_position(project_id: str, trial_id: str, position_id: str, data: TrialPositionUpdate, user: dict = Depends(require_admin)):
+    """Próba pozíció szerkesztése - csak admin"""
     trial_pos = await db.trial_positions.find_one({"id": position_id, "trial_id": trial_id})
     if not trial_pos:
         raise HTTPException(status_code=404, detail="Pozíció nem található")
