@@ -1,0 +1,1 @@
+JWT_SECRET=7VjNwHh64jvqrITcrEd1_MZV-M19nkyfLAkTAhTgltg
