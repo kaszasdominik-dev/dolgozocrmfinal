@@ -2483,8 +2483,8 @@ async def get_trial_positions(project_id: str, trial_id: str, user: dict = Depen
     return result
 
 @api_router.post("/projects/{project_id}/trials/{trial_id}/positions", response_model=TrialPositionResponse)
-async def add_trial_position(project_id: str, trial_id: str, data: TrialPositionCreate, user: dict = Depends(get_current_user)):
-    """Pozíció hozzáadása próbához"""
+async def add_trial_position(project_id: str, trial_id: str, data: TrialPositionCreate, user: dict = Depends(require_admin)):
+    """Pozíció hozzáadása próbához - csak admin"""
     trial = await db.trials.find_one({"id": trial_id, "project_id": project_id})
     if not trial:
         raise HTTPException(status_code=404, detail="Próba nem található")
