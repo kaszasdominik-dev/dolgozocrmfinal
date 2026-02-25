@@ -1668,9 +1668,11 @@ export default function ProjectDetailPage() {
         <TabsContent value="trials" className="p-0 mt-0">
             <div className="p-3 border-b border-border flex items-center justify-between">
               <span className="font-semibold text-sm text-foreground">Próbák kezelése</span>
-              <Button variant="outline" size="sm" onClick={() => openTrialDialog()} data-testid="add-trial-btn">
-                <Plus className="w-4 h-4 mr-1" />Új próba
-              </Button>
+              {user?.role === "admin" && (
+                <Button variant="outline" size="sm" onClick={() => openTrialDialog()} data-testid="add-trial-btn">
+                  <Plus className="w-4 h-4 mr-1" />Új próba
+                </Button>
+              )}
             </div>
 
             {project.trials?.length === 0 ? (
