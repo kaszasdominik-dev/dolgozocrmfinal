@@ -169,6 +169,8 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState(null);
   const [statuses, setStatuses] = useState([]);
   const [availableWorkers, setAvailableWorkers] = useState([]);
+  const [workerSearchQuery, setWorkerSearchQuery] = useState("");  // ÚJ: keresés
+  const [selectedPositionIds, setSelectedPositionIds] = useState([]);  // ÚJ: többszörös pozíció választás
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddWorker, setShowAddWorker] = useState(false);
