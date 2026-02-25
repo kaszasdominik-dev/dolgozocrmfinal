@@ -175,7 +175,7 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showAddWorker, setShowAddWorker] = useState(false);
   const [showAddRecruiter, setShowAddRecruiter] = useState(false);
-  const [addWorkerStatus, setAddWorkerStatus] = useState("Feldolgozatlan");
+  const [addWorkerStatus, setAddWorkerStatus] = useState("Próbára vár");  // Projekten belül nincs Feldolgozatlan
   
   // Mobile detection
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
