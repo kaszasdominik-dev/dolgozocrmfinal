@@ -1141,15 +1141,14 @@ export default function ProjectDetailPage() {
 
           {showAddWorker && (
             <div className="p-3 bg-muted/50 border-b border-border space-y-3">
-              {/* Státusz választó */}
+              {/* Státusz választó - Feldolgozatlan nélkül */}
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm text-muted-foreground">Hozzáadás ide:</span>
+                <span className="text-sm text-muted-foreground">Státusz:</span>
                 <Select value={addWorkerStatus} onValueChange={setAddWorkerStatus}>
                   <SelectTrigger className="w-[180px] h-8">
                     <SelectValue placeholder="Státusz választás" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Feldolgozatlan">Feldolgozatlan</SelectItem>
                     <SelectItem value="Próbára vár">Próbára vár</SelectItem>
                     <SelectItem value="Próba megbeszélve">Próba megbeszélve</SelectItem>
                     <SelectItem value="Dolgozik">Dolgozik</SelectItem>
@@ -1157,18 +1156,80 @@ export default function ProjectDetailPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Pozíció választó */}
+              <div className="space-y-2">
+                <Label className="text-sm">Pozíciók (többszörös választás, kötelező legalább 1):</Label>
+                <div className="flex flex-wrap gap-2 p-2 bg-card border border-border rounded">
+                  {project?.positions && project.positions.length > 0 ? (
+                    project.positions.map(pos => (
+                      <div 
+                        key={pos.id}
+                        className={`cursor-pointer px-3 py-1.5 rounded-md text-sm transition-colors ${
+                          selectedPositionIds.includes(pos.id) 
+                            ? 'bg-primary text-white' 
+                            : 'bg-muted hover:bg-muted/80'
+                        }`}
+                        onClick={() => {
+                          setSelectedPositionIds(prev => 
+                            prev.includes(pos.id) 
+                              ? prev.filter(id => id !== pos.id)
+                              : [...prev, pos.id]
+                          );
+                        }}
+                      >
+                        {pos.name} ({pos.headcount} fő)
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nincs pozíció. Hozz létre egyet a "Pozíciók" tabon!</p>
+                  )}
+                </div>
+                {selectedPositionIds.length === 0 && (
+                  <p className="text-xs text-red-500">Legalább 1 pozíciót kötelező választani!</p>
+                )}
+              </div>
+
+              {/* Dolgozó keresés */}
+              <div className="space-y-2">
+                <Label className="text-sm">Dolgozó keresése:</Label>
+                <Input 
+                  placeholder="Keresés név vagy telefonszám alapján..."
+                  value={workerSearchQuery}
+                  onChange={(e) => setWorkerSearchQuery(e.target.value)}
+                  className="h-8"
+                />
+              </div>
               
-              {availableWorkers.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-                  {availableWorkers.map(w => (
-                    <div key={w.id} className="flex items-center justify-between p-2 bg-card rounded border border-border text-sm text-foreground">
-                      <span className="truncate">{w.name}</span>
-                      <Button size="sm" className="h-6 w-6 p-0 bg-primary" onClick={() => handleAddWorkerWithStatus(w.id)}><Plus className="w-3 h-3" /></Button>
+              {/* Dolgozók listája */}
+              {filteredAvailableWorkers.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-64 overflow-y-auto border border-border rounded p-2">
+                  {filteredAvailableWorkers.map(w => (
+                    <div 
+                      key={w.id} 
+                      className="flex items-center justify-between p-2 bg-card rounded border border-border text-sm text-foreground hover:border-primary transition-colors"
+                    >
+                      <div className="flex-1 min-w-0 mr-2">
+                        <div className="font-medium truncate">{w.name}</div>
+                        <div className="text-xs text-muted-foreground truncate">{w.phone}</div>
+                        {w.position && <div className="text-xs text-blue-600 truncate">{w.position}</div>}
+                      </div>
+                      <Button 
+                        size="sm" 
+                        className="h-7 px-2" 
+                        onClick={() => handleAddWorkerWithStatus(w.id)}
+                        disabled={selectedPositionIds.length === 0}
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        Hozzáad
+                      </Button>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">Nincs elérhető dolgozó</p>
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  {workerSearchQuery ? "Nincs találat" : "Nincs elérhető dolgozó"}
+                </p>
               )}
             </div>
           )}
