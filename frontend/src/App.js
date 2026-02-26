@@ -159,6 +159,7 @@ function App() {
                   <AdminPage />
                 </ProtectedRoute>
               } />
+              <Route path="bulk-email" element={<BulkEmailPage />} />
             </Route>
             
             <Route path="*" element={<Navigate to="/" replace />} />
