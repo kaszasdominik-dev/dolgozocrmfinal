@@ -136,9 +136,9 @@ export default function BulkEmailPage() {
   const fetchWorkers = async () => {
     try {
       const res = await axios.get(`${API}/workers`);
-      const workersWithEmail = res.data.filter(w => w.email && !w.email_unsubscribed);
-      setWorkers(workersWithEmail);
-      setFilteredWorkers(workersWithEmail);
+      // Keep all workers, we'll show which ones have email
+      setWorkers(res.data);
+      setFilteredWorkers(res.data);
     } catch (e) {
       console.error("Error fetching workers:", e);
     }
