@@ -22,6 +22,8 @@ import WorkerImportPage from "@/pages/WorkerImportPage";
 import CalendarPage from "@/pages/CalendarPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import GuidePage from "@/pages/GuidePage";
+import BulkEmailPage from "@/pages/BulkEmailPage";
+import UnsubscribePage from "@/pages/UnsubscribePage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
