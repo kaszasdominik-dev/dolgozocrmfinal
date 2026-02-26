@@ -89,6 +89,7 @@ export default function DashboardLayout() {
     { to: "/calendar", icon: Calendar, label: "Naptár" },
     { to: "/workers", icon: Users, label: "Dolgozók" },
     { to: "/projects", icon: FolderKanban, label: "Projektek" },
+    { to: "/bulk-email", icon: Mail, label: "Bulk Email" },
     { to: "/guide", icon: BookOpen, label: "Súgó" },
     { to: "/settings", icon: Settings, label: "Beállítások" },
   ];
