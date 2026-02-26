@@ -335,7 +335,6 @@ export default function DashboardPage() {
                     {recruiterMonthly.reduce((sum, m) => sum + m.placements, 0)} placement
                   </span>
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Jó úton vagy! 🎉</p>
               </div>
             </CardContent>
           </Card>
