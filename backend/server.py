@@ -5534,11 +5534,673 @@ async def startup_event():
     )
     scheduler.start()
     logger.info("Scheduler started - Daily backup scheduled at 02:00")
-
-
+    
+    # Schedule email queue processor every minute
+    scheduler.add_job(
+        process_email_queue,
+        'interval',
+        minutes=1,
+        id="email_queue_processor",
+        replace_existing=True
+    )
+    logger.info("Email queue processor scheduled")
 
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
     scheduler.shutdown()
     client.close()
+
+
+# ==================== BULK EMAIL ENDPOINTS ====================
+
+from bulk_email import (
+    get_authorization_url,
+    exchange_code_for_tokens,
+    get_gmail_credentials,
+    send_email_via_gmail,
+    generate_unsubscribe_token,
+    replace_template_variables,
+    DAILY_EMAIL_LIMIT
+)
+from fastapi.responses import RedirectResponse
+
+# Pydantic models for Bulk Email
+class EmailTemplateCreate(BaseModel):
+    name: str
+    subject: str
+    body: str
+
+class EmailTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
+
+class WorkerTemplateCreate(BaseModel):
+    name: str
+    filters: Dict[str, Any]  # Store filter criteria
+
+class WorkerTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    filters: Optional[Dict[str, Any]] = None
+
+class BulkEmailCampaignCreate(BaseModel):
+    name: str
+    email_template_id: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    worker_ids: List[str]
+    send_method: str = "individual"  # "individual" or "bcc"
+
+# Gmail OAuth endpoints
+@app.get("/api/bulk-email/gmail/auth-url")
+async def get_gmail_auth_url(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get Gmail OAuth authorization URL"""
+    frontend_url = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:3000')
+    redirect_uri = f"{frontend_url}/api/oauth/gmail/callback"
+    
+    # Generate state token
+    state = secrets.token_urlsafe(32)
+    
+    # Store state with user_id
+    await db.oauth_states.insert_one({
+        "state": state,
+        "user_id": current_user["id"],
+        "created_at": datetime.now(timezone.utc),
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10)
+    })
+    
+    auth_url = get_authorization_url(redirect_uri, state)
+    if not auth_url:
+        raise HTTPException(
+            status_code=500,
+            detail="Gmail OAuth nincs konfigurálva. Kérjük állítsa be a GOOGLE_CLIENT_ID és GOOGLE_CLIENT_SECRET környezeti változókat."
+        )
+    
+    return {"auth_url": auth_url}
+
+
+@app.get("/api/oauth/gmail/callback")
+async def gmail_oauth_callback(code: str, state: str):
+    """Handle Gmail OAuth callback"""
+    # Verify state
+    state_doc = await db.oauth_states.find_one({"state": state})
+    if not state_doc:
+        return RedirectResponse(url="/bulk-email?error=invalid_state")
+    
+    if datetime.now(timezone.utc) > state_doc.get("expires_at", datetime.now(timezone.utc)):
+        await db.oauth_states.delete_one({"state": state})
+        return RedirectResponse(url="/bulk-email?error=expired_state")
+    
+    user_id = state_doc["user_id"]
+    await db.oauth_states.delete_one({"state": state})
+    
+    # Exchange code for tokens
+    frontend_url = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:3000')
+    redirect_uri = f"{frontend_url}/api/oauth/gmail/callback"
+    
+    token_data = await exchange_code_for_tokens(code, redirect_uri)
+    if not token_data:
+        return RedirectResponse(url="/bulk-email?error=token_exchange_failed")
+    
+    # Store tokens for user
+    await db.gmail_tokens.update_one(
+        {"user_id": user_id},
+        {
+            "$set": {
+                "user_id": user_id,
+                "access_token": token_data["access_token"],
+                "refresh_token": token_data["refresh_token"],
+                "token_uri": token_data.get("token_uri", "https://oauth2.googleapis.com/token"),
+                "client_id": token_data["client_id"],
+                "client_secret": token_data["client_secret"],
+                "expires_at": token_data["expires_at"],
+                "gmail_email": token_data["email"],
+                "gmail_name": token_data.get("name"),
+                "connected_at": datetime.now(timezone.utc)
+            }
+        },
+        upsert=True
+    )
+    
+    return RedirectResponse(url="/bulk-email?success=gmail_connected")
+
+
+@app.get("/api/bulk-email/gmail/status")
+async def get_gmail_status(current_user: dict = Depends(get_current_user)):
+    """Get current user's Gmail connection status"""
+    token = await db.gmail_tokens.find_one(
+        {"user_id": current_user["id"]},
+        {"_id": 0, "access_token": 0, "refresh_token": 0, "client_secret": 0}
+    )
+    
+    if not token:
+        return {"connected": False}
+    
+    # Get today's sent count
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    sent_today = await db.email_logs.count_documents({
+        "sender_user_id": current_user["id"],
+        "sent_at": {"$gte": today_start},
+        "status": "sent"
+    })
+    
+    # Calculate reset time (next midnight UTC)
+    next_reset = today_start + timedelta(days=1)
+    
+    return {
+        "connected": True,
+        "gmail_email": token.get("gmail_email"),
+        "gmail_name": token.get("gmail_name"),
+        "connected_at": token.get("connected_at"),
+        "sent_today": sent_today,
+        "daily_limit": DAILY_EMAIL_LIMIT,
+        "remaining_today": max(0, DAILY_EMAIL_LIMIT - sent_today),
+        "next_reset": next_reset.isoformat()
+    }
+
+
+@app.delete("/api/bulk-email/gmail/disconnect")
+async def disconnect_gmail(current_user: dict = Depends(get_current_user)):
+    """Disconnect Gmail account"""
+    await db.gmail_tokens.delete_one({"user_id": current_user["id"]})
+    return {"message": "Gmail fiók leválasztva"}
+
+
+# Email Templates CRUD
+@app.get("/api/bulk-email/templates")
+async def get_email_templates(current_user: dict = Depends(get_current_user)):
+    """Get user's email templates"""
+    templates = await db.email_templates.find(
+        {"user_id": current_user["id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return templates
+
+
+@app.post("/api/bulk-email/templates")
+async def create_email_template(
+    template: EmailTemplateCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create new email template"""
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "name": template.name,
+        "subject": template.subject,
+        "body": template.body,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc)
+    }
+    await db.email_templates.insert_one(doc)
+    del doc["_id"]
+    return doc
+
+
+@app.put("/api/bulk-email/templates/{template_id}")
+async def update_email_template(
+    template_id: str,
+    template: EmailTemplateUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update email template"""
+    update_data = {k: v for k, v in template.dict().items() if v is not None}
+    update_data["updated_at"] = datetime.now(timezone.utc)
+    
+    result = await db.email_templates.update_one(
+        {"id": template_id, "user_id": current_user["id"]},
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Sablon nem található")
+    
+    return {"message": "Sablon frissítve"}
+
+
+@app.delete("/api/bulk-email/templates/{template_id}")
+async def delete_email_template(
+    template_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete email template"""
+    result = await db.email_templates.delete_one(
+        {"id": template_id, "user_id": current_user["id"]}
+    )
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Sablon nem található")
+    
+    return {"message": "Sablon törölve"}
+
+
+# Worker Templates (saved filters) CRUD
+@app.get("/api/bulk-email/worker-templates")
+async def get_worker_templates(current_user: dict = Depends(get_current_user)):
+    """Get user's worker templates (saved filters)"""
+    templates = await db.worker_templates.find(
+        {"user_id": current_user["id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return templates
+
+
+@app.post("/api/bulk-email/worker-templates")
+async def create_worker_template(
+    template: WorkerTemplateCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create new worker template (saved filter)"""
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "name": template.name,
+        "filters": template.filters,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc)
+    }
+    await db.worker_templates.insert_one(doc)
+    del doc["_id"]
+    return doc
+
+
+@app.put("/api/bulk-email/worker-templates/{template_id}")
+async def update_worker_template(
+    template_id: str,
+    template: WorkerTemplateUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update worker template"""
+    update_data = {k: v for k, v in template.dict().items() if v is not None}
+    update_data["updated_at"] = datetime.now(timezone.utc)
+    
+    result = await db.worker_templates.update_one(
+        {"id": template_id, "user_id": current_user["id"]},
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Sablon nem található")
+    
+    return {"message": "Sablon frissítve"}
+
+
+@app.delete("/api/bulk-email/worker-templates/{template_id}")
+async def delete_worker_template(
+    template_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete worker template"""
+    result = await db.worker_templates.delete_one(
+        {"id": template_id, "user_id": current_user["id"]}
+    )
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Sablon nem található")
+    
+    return {"message": "Sablon törölve"}
+
+
+# Campaign Management
+@app.get("/api/bulk-email/campaigns")
+async def get_campaigns(current_user: dict = Depends(get_current_user)):
+    """Get user's email campaigns"""
+    campaigns = await db.email_campaigns.find(
+        {"user_id": current_user["id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return campaigns
+
+
+@app.post("/api/bulk-email/campaigns")
+async def create_campaign(
+    campaign: BulkEmailCampaignCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create and start a bulk email campaign"""
+    # Check Gmail connection
+    gmail_token = await db.gmail_tokens.find_one({"user_id": current_user["id"]})
+    if not gmail_token:
+        raise HTTPException(status_code=400, detail="Gmail fiók nincs kapcsolva")
+    
+    # Get email template if provided
+    subject = campaign.subject
+    body = campaign.body
+    
+    if campaign.email_template_id:
+        template = await db.email_templates.find_one({
+            "id": campaign.email_template_id,
+            "user_id": current_user["id"]
+        })
+        if template:
+            subject = template.get("subject", subject)
+            body = template.get("body", body)
+    
+    if not subject or not body:
+        raise HTTPException(status_code=400, detail="Email tárgya és szövege kötelező")
+    
+    # Get workers and filter out unsubscribed
+    workers = await db.workers.find({
+        "id": {"$in": campaign.worker_ids},
+        "email": {"$exists": True, "$ne": ""},
+        "email_unsubscribed": {"$ne": True}
+    }).to_list(None)
+    
+    if not workers:
+        raise HTTPException(status_code=400, detail="Nincs kiválasztott dolgozó email címmel")
+    
+    # Create campaign
+    campaign_id = str(uuid.uuid4())
+    campaign_doc = {
+        "id": campaign_id,
+        "user_id": current_user["id"],
+        "name": campaign.name,
+        "subject": subject,
+        "body": body,
+        "send_method": campaign.send_method,
+        "total_recipients": len(workers),
+        "sent_count": 0,
+        "failed_count": 0,
+        "pending_count": len(workers),
+        "status": "queued",  # queued, in_progress, completed, paused
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc)
+    }
+    await db.email_campaigns.insert_one(campaign_doc)
+    
+    # Create queue entries for each worker
+    queue_entries = []
+    for worker in workers:
+        unsubscribe_token = generate_unsubscribe_token()
+        
+        # Store unsubscribe token
+        await db.unsubscribe_tokens.update_one(
+            {"worker_id": worker["id"]},
+            {
+                "$set": {
+                    "worker_id": worker["id"],
+                    "token": unsubscribe_token,
+                    "created_at": datetime.now(timezone.utc)
+                }
+            },
+            upsert=True
+        )
+        
+        queue_entries.append({
+            "id": str(uuid.uuid4()),
+            "campaign_id": campaign_id,
+            "user_id": current_user["id"],
+            "worker_id": worker["id"],
+            "worker_name": worker.get("name"),
+            "worker_email": worker.get("email"),
+            "unsubscribe_token": unsubscribe_token,
+            "status": "pending",  # pending, sent, failed
+            "created_at": datetime.now(timezone.utc),
+            "attempts": 0
+        })
+    
+    if queue_entries:
+        await db.email_queue.insert_many(queue_entries)
+    
+    del campaign_doc["_id"]
+    return campaign_doc
+
+
+@app.put("/api/bulk-email/campaigns/{campaign_id}/pause")
+async def pause_campaign(
+    campaign_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Pause a campaign"""
+    result = await db.email_campaigns.update_one(
+        {"id": campaign_id, "user_id": current_user["id"], "status": {"$in": ["queued", "in_progress"]}},
+        {"$set": {"status": "paused", "updated_at": datetime.now(timezone.utc)}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Kampány nem található vagy már befejezve")
+    
+    return {"message": "Kampány szüneteltetve"}
+
+
+@app.put("/api/bulk-email/campaigns/{campaign_id}/resume")
+async def resume_campaign(
+    campaign_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Resume a paused campaign"""
+    result = await db.email_campaigns.update_one(
+        {"id": campaign_id, "user_id": current_user["id"], "status": "paused"},
+        {"$set": {"status": "queued", "updated_at": datetime.now(timezone.utc)}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Kampány nem található vagy nem szünetel")
+    
+    return {"message": "Kampány folytatva"}
+
+
+@app.delete("/api/bulk-email/campaigns/{campaign_id}")
+async def delete_campaign(
+    campaign_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a campaign and its queue entries"""
+    # Delete queue entries
+    await db.email_queue.delete_many({"campaign_id": campaign_id})
+    
+    # Delete campaign
+    result = await db.email_campaigns.delete_one({
+        "id": campaign_id,
+        "user_id": current_user["id"]
+    })
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Kampány nem található")
+    
+    return {"message": "Kampány törölve"}
+
+
+# Email queue processor (runs every minute via scheduler)
+async def process_email_queue():
+    """Process pending emails in queue"""
+    try:
+        # Get all users with pending emails
+        users_with_pending = await db.email_queue.distinct("user_id", {"status": "pending"})
+        
+        for user_id in users_with_pending:
+            # Check daily limit
+            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            sent_today = await db.email_logs.count_documents({
+                "sender_user_id": user_id,
+                "sent_at": {"$gte": today_start},
+                "status": "sent"
+            })
+            
+            if sent_today >= DAILY_EMAIL_LIMIT:
+                continue  # Skip this user, limit reached
+            
+            remaining = DAILY_EMAIL_LIMIT - sent_today
+            
+            # Get Gmail token
+            gmail_token = await db.gmail_tokens.find_one({"user_id": user_id})
+            if not gmail_token:
+                continue
+            
+            # Get credentials
+            creds, new_token_data = await get_gmail_credentials(gmail_token)
+            if not creds:
+                continue
+            
+            # Update token if refreshed
+            if new_token_data:
+                await db.gmail_tokens.update_one(
+                    {"user_id": user_id},
+                    {"$set": new_token_data}
+                )
+            
+            # Get pending emails for this user (limited by remaining quota)
+            pending_emails = await db.email_queue.find({
+                "user_id": user_id,
+                "status": "pending"
+            }).limit(remaining).to_list(remaining)
+            
+            for email_entry in pending_emails:
+                # Get campaign
+                campaign = await db.email_campaigns.find_one({"id": email_entry["campaign_id"]})
+                if not campaign or campaign.get("status") == "paused":
+                    continue
+                
+                # Update campaign status to in_progress
+                await db.email_campaigns.update_one(
+                    {"id": campaign["id"], "status": "queued"},
+                    {"$set": {"status": "in_progress"}}
+                )
+                
+                # Get worker data for template replacement
+                worker = await db.workers.find_one({"id": email_entry["worker_id"]})
+                if not worker:
+                    await db.email_queue.update_one(
+                        {"id": email_entry["id"]},
+                        {"$set": {"status": "failed", "error": "Worker not found"}}
+                    )
+                    continue
+                
+                # Replace template variables
+                subject = replace_template_variables(campaign["subject"], worker)
+                body = replace_template_variables(campaign["body"], worker)
+                
+                # Send email
+                result = await send_email_via_gmail(
+                    credentials=creds,
+                    to_email=email_entry["worker_email"],
+                    subject=subject,
+                    body=body,
+                    from_email=gmail_token.get("gmail_email"),
+                    unsubscribe_token=email_entry["unsubscribe_token"]
+                )
+                
+                if result["success"]:
+                    # Update queue entry
+                    await db.email_queue.update_one(
+                        {"id": email_entry["id"]},
+                        {
+                            "$set": {
+                                "status": "sent",
+                                "sent_at": datetime.now(timezone.utc),
+                                "message_id": result.get("message_id")
+                            }
+                        }
+                    )
+                    
+                    # Log email
+                    await db.email_logs.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "campaign_id": campaign["id"],
+                        "sender_user_id": user_id,
+                        "worker_id": email_entry["worker_id"],
+                        "worker_email": email_entry["worker_email"],
+                        "subject": subject,
+                        "status": "sent",
+                        "sent_at": datetime.now(timezone.utc)
+                    })
+                    
+                    # Update campaign counters
+                    await db.email_campaigns.update_one(
+                        {"id": campaign["id"]},
+                        {
+                            "$inc": {"sent_count": 1, "pending_count": -1},
+                            "$set": {"updated_at": datetime.now(timezone.utc)}
+                        }
+                    )
+                else:
+                    # Update queue entry with error
+                    attempts = email_entry.get("attempts", 0) + 1
+                    if attempts >= 3:
+                        await db.email_queue.update_one(
+                            {"id": email_entry["id"]},
+                            {
+                                "$set": {
+                                    "status": "failed",
+                                    "error": result.get("error"),
+                                    "attempts": attempts
+                                }
+                            }
+                        )
+                        
+                        await db.email_campaigns.update_one(
+                            {"id": campaign["id"]},
+                            {
+                                "$inc": {"failed_count": 1, "pending_count": -1},
+                                "$set": {"updated_at": datetime.now(timezone.utc)}
+                            }
+                        )
+                    else:
+                        await db.email_queue.update_one(
+                            {"id": email_entry["id"]},
+                            {"$set": {"attempts": attempts, "last_error": result.get("error")}}
+                        )
+            
+            # Check if campaign is completed
+            for email_entry in pending_emails:
+                campaign = await db.email_campaigns.find_one({"id": email_entry["campaign_id"]})
+                if campaign and campaign.get("pending_count", 0) <= 0:
+                    await db.email_campaigns.update_one(
+                        {"id": campaign["id"]},
+                        {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc)}}
+                    )
+    
+    except Exception as e:
+        logger.error(f"Error processing email queue: {e}")
+
+
+# Unsubscribe endpoint (public - no auth required)
+@app.get("/api/leiratkozas/{token}")
+async def unsubscribe_page(token: str):
+    """Handle unsubscribe - redirect to frontend page"""
+    return RedirectResponse(url=f"/leiratkozas/{token}")
+
+
+@app.post("/api/leiratkozas/{token}")
+async def process_unsubscribe(token: str):
+    """Process unsubscribe request"""
+    # Find token
+    token_doc = await db.unsubscribe_tokens.find_one({"token": token})
+    if not token_doc:
+        raise HTTPException(status_code=404, detail="Érvénytelen leiratkozási link")
+    
+    worker_id = token_doc["worker_id"]
+    
+    # Get worker email for response
+    worker = await db.workers.find_one({"id": worker_id})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Dolgozó nem található")
+    
+    # Mark worker as unsubscribed
+    await db.workers.update_one(
+        {"id": worker_id},
+        {"$set": {"email_unsubscribed": True, "unsubscribed_at": datetime.now(timezone.utc)}}
+    )
+    
+    return {
+        "success": True,
+        "email": worker.get("email", "").replace(worker.get("email", "")[3:-3], "***") if worker.get("email") else None,
+        "message": "Sikeresen leiratkozott az email értesítésekről."
+    }
+
+
+# Worker email history
+@app.get("/api/workers/{worker_id}/email-history")
+async def get_worker_email_history(
+    worker_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get email history for a worker"""
+    emails = await db.email_logs.find(
+        {"worker_id": worker_id},
+        {"_id": 0}
+    ).sort("sent_at", -1).limit(50).to_list(50)
+    return emails
