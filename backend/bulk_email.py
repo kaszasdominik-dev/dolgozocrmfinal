@@ -186,10 +186,9 @@ Amennyiben nem szeretne több állásról emailes értesítést kapni, az alább
     <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
         {body.replace(chr(10), '<br>')}
         
-        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-        <p style="font-size: 12px; color: #666; text-align: center;">
-            Amennyiben nem szeretne több állásról emailes értesítést kapni, 
-            <a href="{unsubscribe_url}" style="color: #666;">ezen a linken tud leiratkozni</a>.
+        <p style="font-size: 10px; font-style: italic; color: #999; text-align: center; margin-top: 40px;">
+            Amennyiben nem szeretne több állásajánlatot kapni, 
+            <a href="{unsubscribe_url}" style="color: #999; text-decoration: underline;">ezen a linken tud leiratkozni</a>.
         </p>
     </div>
 </body>
