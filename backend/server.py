@@ -6167,7 +6167,7 @@ async def unsubscribe_page(token: str):
 
 @app.post("/api/leiratkozas/{token}")
 async def process_unsubscribe(token: str):
-    """Process unsubscribe request"""
+    """Process unsubscribe request - deletes email address"""
     # Find token
     token_doc = await db.unsubscribe_tokens.find_one({"token": token})
     if not token_doc:
@@ -6180,15 +6180,25 @@ async def process_unsubscribe(token: str):
     if not worker:
         raise HTTPException(status_code=404, detail="Dolgozó nem található")
     
-    # Mark worker as unsubscribed
+    # Store email for response (masked)
+    old_email = worker.get("email", "")
+    masked_email = old_email[:3] + "***" + old_email[-3:] if old_email and len(old_email) > 6 else "***"
+    
+    # Delete email address from worker
     await db.workers.update_one(
         {"id": worker_id},
-        {"$set": {"email_unsubscribed": True, "unsubscribed_at": datetime.now(timezone.utc)}}
+        {
+            "$unset": {"email": ""},
+            "$set": {"unsubscribed_at": datetime.now(timezone.utc)}
+        }
     )
+    
+    # Delete the unsubscribe token
+    await db.unsubscribe_tokens.delete_one({"token": token})
     
     return {
         "success": True,
-        "email": worker.get("email", "").replace(worker.get("email", "")[3:-3], "***") if worker.get("email") else None,
+        "email": masked_email,
         "message": "Sikeresen leiratkozott az email értesítésekről."
     }
 
