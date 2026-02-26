@@ -238,12 +238,38 @@ export default function BulkEmailPage() {
       return;
     }
     
+    // Check how many selected workers have email
+    const selectedWorkers = workers.filter(w => selectedWorkerIds.includes(w.id));
+    const withEmail = selectedWorkers.filter(w => w.email && w.email.trim() !== "");
+    const withoutEmail = selectedWorkers.length - withEmail.length;
+    
+    let finalWorkerIds = selectedWorkerIds;
+    
+    if (withoutEmail > 0) {
+      const confirmRemove = window.confirm(
+        `${withEmail.length}/${selectedWorkers.length} dolgozónak van email címe.\n\n` +
+        `${withoutEmail} dolgozónak nincs email címe.\n\n` +
+        `Eltávolítod őket a sablonból?`
+      );
+      
+      if (confirmRemove) {
+        finalWorkerIds = withEmail.map(w => w.id);
+        setSelectedWorkerIds(finalWorkerIds);
+        toast.success(`${withoutEmail} dolgozó eltávolítva`);
+      }
+    }
+    
+    if (finalWorkerIds.length === 0) {
+      toast.error("Nincs dolgozó email címmel a sablonban!");
+      return;
+    }
+    
     const data = {
       name: workerTemplateForm.name,
       filters: {
         search: workerSearch,
         category: workerFilter,
-        worker_ids: selectedWorkerIds
+        worker_ids: finalWorkerIds
       }
     };
     
