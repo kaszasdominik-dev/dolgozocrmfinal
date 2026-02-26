@@ -170,8 +170,8 @@ def create_email_with_unsubscribe(
     # Plain text version
     text_content = f"""{body}
 
----
-Amennyiben nem szeretne több állásról emailes értesítést kapni, az alábbi linken tud leiratkozni:
+--
+Amennyiben nem szeretne több állásajánlatot kapni, az alábbi linken tud leiratkozni:
 {unsubscribe_url}
 """
     
