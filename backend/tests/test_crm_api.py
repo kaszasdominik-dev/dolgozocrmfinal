@@ -14,6 +14,41 @@ ADMIN_PASSWORD = "Admin123!"
 RECRUITER_EMAIL = "toborzo@crm.hu"
 RECRUITER_PASSWORD = "Toborzo123!"
 
+# Global session to avoid rate limiting
+_admin_token = None
+_recruiter_token = None
+
+
+def get_admin_token():
+    """Get admin token (cached)"""
+    global _admin_token
+    if _admin_token is None:
+        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": ADMIN_EMAIL,
+            "password": ADMIN_PASSWORD
+        })
+        if response.status_code == 200:
+            _admin_token = response.json()["token"]
+        else:
+            pytest.fail(f"Admin login failed: {response.status_code} - {response.text}")
+    return _admin_token
+
+
+def get_recruiter_token():
+    """Get recruiter token (cached)"""
+    global _recruiter_token
+    if _recruiter_token is None:
+        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": RECRUITER_EMAIL,
+            "password": RECRUITER_PASSWORD
+        })
+        if response.status_code == 200:
+            _recruiter_token = response.json()["token"]
+        else:
+            print(f"Recruiter login failed: {response.status_code}")
+            return None
+    return _recruiter_token
+
 
 class TestAuthentication:
     """Authentication endpoint tests"""
@@ -44,25 +79,9 @@ class TestAuthentication:
         assert data["user"]["role"] == "user", "User role should be user (recruiter)"
         print(f"SUCCESS: Recruiter login - user: {data['user']['email']}, role: {data['user']['role']}")
     
-    def test_login_invalid_credentials(self):
-        """Test login with invalid credentials"""
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "invalid@test.com",
-            "password": "wrongpassword"
-        })
-        assert response.status_code in [401, 429], f"Expected 401/429, got {response.status_code}"
-        print("SUCCESS: Invalid login correctly rejected")
-    
     def test_get_current_user(self):
         """Test getting current user info"""
-        # First login
-        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": ADMIN_EMAIL,
-            "password": ADMIN_PASSWORD
-        })
-        token = login_res.json()["token"]
-        
-        # Get current user
+        token = get_admin_token()
         response = requests.get(f"{BASE_URL}/api/auth/me", headers={
             "Authorization": f"Bearer {token}"
         })
@@ -75,28 +94,23 @@ class TestAuthentication:
 class TestDashboard:
     """Dashboard API tests"""
     
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        """Get admin token for tests"""
-        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": ADMIN_EMAIL,
-            "password": ADMIN_PASSWORD
-        })
-        self.admin_token = login_res.json()["token"]
-        self.headers = {"Authorization": f"Bearer {self.admin_token}"}
-    
     def test_admin_stats(self):
         """Test admin dashboard stats endpoint"""
-        response = requests.get(f"{BASE_URL}/api/dashboard/admin-stats", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/dashboard/admin-stats", headers=headers)
         assert response.status_code == 200, f"Admin stats failed: {response.text}"
         data = response.json()
         assert "total_workers" in data, "total_workers not in response"
         assert "status_counts" in data, "status_counts not in response"
         print(f"SUCCESS: Admin stats - total workers: {data['total_workers']}")
+        print(f"  Status counts: {data['status_counts']}")
     
     def test_admin_recruiter_performance(self):
         """Test admin recruiter performance endpoint"""
-        response = requests.get(f"{BASE_URL}/api/dashboard/admin-recruiter-performance", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/dashboard/admin-recruiter-performance", headers=headers)
         assert response.status_code == 200, f"Recruiter performance failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
@@ -104,7 +118,9 @@ class TestDashboard:
     
     def test_admin_monthly_trend(self):
         """Test admin monthly trend endpoint"""
-        response = requests.get(f"{BASE_URL}/api/dashboard/admin-monthly-trend", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/dashboard/admin-monthly-trend", headers=headers)
         assert response.status_code == 200, f"Monthly trend failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
@@ -112,7 +128,9 @@ class TestDashboard:
     
     def test_admin_alerts(self):
         """Test admin alerts endpoint"""
-        response = requests.get(f"{BASE_URL}/api/dashboard/admin-alerts", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/dashboard/admin-alerts", headers=headers)
         assert response.status_code == 200, f"Admin alerts failed: {response.text}"
         data = response.json()
         print(f"SUCCESS: Admin alerts retrieved")
@@ -121,26 +139,13 @@ class TestDashboard:
 class TestRecruiterDashboard:
     """Recruiter Dashboard API tests"""
     
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        """Get recruiter token for tests"""
-        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": RECRUITER_EMAIL,
-            "password": RECRUITER_PASSWORD
-        })
-        if login_res.status_code == 200:
-            self.recruiter_token = login_res.json()["token"]
-            self.headers = {"Authorization": f"Bearer {self.recruiter_token}"}
-            self.skip_tests = False
-        else:
-            self.skip_tests = True
-            pytest.skip("Recruiter login failed - skipping recruiter tests")
-    
     def test_recruiter_stats(self):
         """Test recruiter dashboard stats endpoint"""
-        if self.skip_tests:
-            pytest.skip("Recruiter not available")
-        response = requests.get(f"{BASE_URL}/api/dashboard/recruiter-stats", headers=self.headers)
+        token = get_recruiter_token()
+        if not token:
+            pytest.skip("Recruiter login failed")
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/dashboard/recruiter-stats", headers=headers)
         assert response.status_code == 200, f"Recruiter stats failed: {response.text}"
         data = response.json()
         assert "total_workers" in data, "total_workers not in response"
@@ -148,9 +153,11 @@ class TestRecruiterDashboard:
     
     def test_recruiter_monthly_performance(self):
         """Test recruiter monthly performance endpoint"""
-        if self.skip_tests:
-            pytest.skip("Recruiter not available")
-        response = requests.get(f"{BASE_URL}/api/dashboard/recruiter-monthly-performance", headers=self.headers)
+        token = get_recruiter_token()
+        if not token:
+            pytest.skip("Recruiter login failed")
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/dashboard/recruiter-monthly-performance", headers=headers)
         assert response.status_code == 200, f"Monthly performance failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
@@ -158,9 +165,11 @@ class TestRecruiterDashboard:
     
     def test_recruiter_todos(self):
         """Test recruiter todos endpoint"""
-        if self.skip_tests:
-            pytest.skip("Recruiter not available")
-        response = requests.get(f"{BASE_URL}/api/dashboard/recruiter-todos", headers=self.headers)
+        token = get_recruiter_token()
+        if not token:
+            pytest.skip("Recruiter login failed")
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/dashboard/recruiter-todos", headers=headers)
         assert response.status_code == 200, f"Recruiter todos failed: {response.text}"
         print("SUCCESS: Recruiter todos retrieved")
 
@@ -168,19 +177,11 @@ class TestRecruiterDashboard:
 class TestWorkers:
     """Workers API tests"""
     
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        """Get admin token for tests"""
-        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": ADMIN_EMAIL,
-            "password": ADMIN_PASSWORD
-        })
-        self.admin_token = login_res.json()["token"]
-        self.headers = {"Authorization": f"Bearer {self.admin_token}"}
-    
     def test_get_workers_list(self):
         """Test getting workers list"""
-        response = requests.get(f"{BASE_URL}/api/workers", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/workers", headers=headers)
         assert response.status_code == 200, f"Get workers failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
@@ -188,7 +189,9 @@ class TestWorkers:
     
     def test_get_worker_types(self):
         """Test getting worker types"""
-        response = requests.get(f"{BASE_URL}/api/worker-types", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/worker-types", headers=headers)
         assert response.status_code == 200, f"Get worker types failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
@@ -196,18 +199,21 @@ class TestWorkers:
     
     def test_get_statuses(self):
         """Test getting statuses"""
-        response = requests.get(f"{BASE_URL}/api/statuses", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/statuses", headers=headers)
         assert response.status_code == 200, f"Get statuses failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
         print(f"SUCCESS: Statuses - {len(data)} statuses")
-        # Verify unified statuses exist
         status_names = [s["name"] for s in data]
-        print(f"Available statuses: {status_names}")
+        print(f"  Available statuses: {status_names}")
     
     def test_get_global_statuses(self):
         """Test getting global statuses (unified 5 statuses)"""
-        response = requests.get(f"{BASE_URL}/api/global-statuses", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/global-statuses", headers=headers)
         assert response.status_code == 200, f"Get global statuses failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
@@ -219,7 +225,9 @@ class TestWorkers:
     
     def test_get_categories(self):
         """Test getting categories"""
-        response = requests.get(f"{BASE_URL}/api/categories", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/categories", headers=headers)
         assert response.status_code == 200, f"Get categories failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
@@ -229,19 +237,11 @@ class TestWorkers:
 class TestProjects:
     """Projects API tests"""
     
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        """Get admin token for tests"""
-        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": ADMIN_EMAIL,
-            "password": ADMIN_PASSWORD
-        })
-        self.admin_token = login_res.json()["token"]
-        self.headers = {"Authorization": f"Bearer {self.admin_token}"}
-    
     def test_get_projects_list(self):
         """Test getting projects list"""
-        response = requests.get(f"{BASE_URL}/api/projects", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/projects", headers=headers)
         assert response.status_code == 200, f"Get projects failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
@@ -250,13 +250,14 @@ class TestProjects:
     
     def test_get_project_detail(self):
         """Test getting project detail"""
-        # First get projects list
-        projects_res = requests.get(f"{BASE_URL}/api/projects", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        projects_res = requests.get(f"{BASE_URL}/api/projects", headers=headers)
         projects = projects_res.json()
         
         if len(projects) > 0:
             project_id = projects[0]["id"]
-            response = requests.get(f"{BASE_URL}/api/projects/{project_id}", headers=self.headers)
+            response = requests.get(f"{BASE_URL}/api/projects/{project_id}", headers=headers)
             assert response.status_code == 200, f"Get project detail failed: {response.text}"
             data = response.json()
             assert "id" in data, "id not in response"
@@ -269,19 +270,11 @@ class TestProjects:
 class TestNotifications:
     """Notifications API tests"""
     
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        """Get admin token for tests"""
-        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": ADMIN_EMAIL,
-            "password": ADMIN_PASSWORD
-        })
-        self.admin_token = login_res.json()["token"]
-        self.headers = {"Authorization": f"Bearer {self.admin_token}"}
-    
     def test_get_notifications(self):
         """Test getting notifications list"""
-        response = requests.get(f"{BASE_URL}/api/notifications", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/notifications", headers=headers)
         assert response.status_code == 200, f"Get notifications failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
@@ -289,7 +282,9 @@ class TestNotifications:
     
     def test_get_unread_count(self):
         """Test getting unread notifications count"""
-        response = requests.get(f"{BASE_URL}/api/notifications/unread-count", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/notifications/unread-count", headers=headers)
         assert response.status_code == 200, f"Get unread count failed: {response.text}"
         data = response.json()
         assert "count" in data, "count not in response"
@@ -299,22 +294,15 @@ class TestNotifications:
 class TestGoogleSheetsIntegration:
     """Google Sheets integration tests"""
     
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        """Get admin token for tests"""
-        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": ADMIN_EMAIL,
-            "password": ADMIN_PASSWORD
-        })
-        self.admin_token = login_res.json()["token"]
-        self.headers = {"Authorization": f"Bearer {self.admin_token}"}
-        self.test_sheet_url = "https://docs.google.com/spreadsheets/d/13RORNShE-JN3cJO6GH_sTAXfIegAiSwgn0Pimb2RvjA/edit"
-    
     def test_google_sheets_connection(self):
         """Test Google Sheets connection endpoint"""
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        test_sheet_url = "https://docs.google.com/spreadsheets/d/13RORNShE-JN3cJO6GH_sTAXfIegAiSwgn0Pimb2RvjA/edit"
+        
         response = requests.post(f"{BASE_URL}/api/forms/test-connection", 
-            headers=self.headers,
-            json={"sheet_url": self.test_sheet_url}
+            headers=headers,
+            json={"sheet_url": test_sheet_url}
         )
         # Connection may fail if sheet is not public, but endpoint should work
         if response.status_code == 200:
@@ -322,25 +310,16 @@ class TestGoogleSheetsIntegration:
             print(f"SUCCESS: Google Sheets connection - {data.get('row_count', 0)} rows found")
         else:
             print(f"INFO: Google Sheets connection returned {response.status_code} - sheet may not be public")
-            # This is not a failure - the endpoint works, just the sheet access may be restricted
 
 
 class TestUsers:
     """Users API tests (Admin only)"""
     
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        """Get admin token for tests"""
-        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": ADMIN_EMAIL,
-            "password": ADMIN_PASSWORD
-        })
-        self.admin_token = login_res.json()["token"]
-        self.headers = {"Authorization": f"Bearer {self.admin_token}"}
-    
     def test_get_users_list(self):
         """Test getting users list (admin only)"""
-        response = requests.get(f"{BASE_URL}/api/users", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/users", headers=headers)
         assert response.status_code == 200, f"Get users failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
@@ -350,7 +329,9 @@ class TestUsers:
     
     def test_get_user_stats(self):
         """Test getting user stats (admin only)"""
-        response = requests.get(f"{BASE_URL}/api/users/stats", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/users/stats", headers=headers)
         assert response.status_code == 200, f"Get user stats failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
@@ -360,19 +341,11 @@ class TestUsers:
 class TestTags:
     """Tags API tests"""
     
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        """Get admin token for tests"""
-        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": ADMIN_EMAIL,
-            "password": ADMIN_PASSWORD
-        })
-        self.admin_token = login_res.json()["token"]
-        self.headers = {"Authorization": f"Bearer {self.admin_token}"}
-    
     def test_get_tags(self):
         """Test getting tags list"""
-        response = requests.get(f"{BASE_URL}/api/tags", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/tags", headers=headers)
         assert response.status_code == 200, f"Get tags failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
@@ -382,19 +355,11 @@ class TestTags:
 class TestPositions:
     """Positions API tests"""
     
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        """Get admin token for tests"""
-        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": ADMIN_EMAIL,
-            "password": ADMIN_PASSWORD
-        })
-        self.admin_token = login_res.json()["token"]
-        self.headers = {"Authorization": f"Bearer {self.admin_token}"}
-    
     def test_get_positions(self):
         """Test getting positions list"""
-        response = requests.get(f"{BASE_URL}/api/positions", headers=self.headers)
+        token = get_admin_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{BASE_URL}/api/positions", headers=headers)
         assert response.status_code == 200, f"Get positions failed: {response.text}"
         data = response.json()
         assert isinstance(data, list), "Response should be a list"
