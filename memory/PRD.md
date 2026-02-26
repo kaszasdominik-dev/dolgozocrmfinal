@@ -7,6 +7,7 @@ A felhasználó egy meglévő CRM-rendszer felülvizsgálatát és továbbfejles
 
 ### Backend (FastAPI + MongoDB)
 - `/app/backend/server.py` - Fő API szerver
+- `/app/backend/bulk_email.py` - Bulk Email modul (Gmail OAuth)
 - MongoDB adatbázis: test_database
 - Google Sheets integráció: `/app/backend/google_sheets_helper.py`
 
@@ -14,6 +15,8 @@ A felhasználó egy meglévő CRM-rendszer felülvizsgálatát és továbbfejles
 - `/app/frontend/src/pages/DashboardPage.js` - Admin és toborzó dashboard
 - `/app/frontend/src/pages/WorkersPage.js` - Dolgozók listázása
 - `/app/frontend/src/pages/ProjectDetailPage.js` - Projekt részletek + Kanban pipeline
+- `/app/frontend/src/pages/BulkEmailPage.js` - Bulk Email modul
+- `/app/frontend/src/pages/UnsubscribePage.js` - Leiratkozás oldal
 - `/app/frontend/src/pages/NotificationsPage.js` - Értesítések
 - `/app/frontend/src/components/FormSettingsDialog.js` - Google Sheets integráció
 - `/app/frontend/src/components/DashboardLayout.js` - Fő layout
@@ -24,61 +27,55 @@ A felhasználó egy meglévő CRM-rendszer felülvizsgálatát és továbbfejles
 
 ## Elvégzett Feladatok
 
-### 2026-02-26 - E2E Tesztelés ✅
-- Teljes rendszer E2E tesztelés: **100% sikeres** (backend: 24/24 teszt, frontend: összes funkció működik)
-- Tesztelt funkciók:
-  - Admin és Toborzó bejelentkezés
-  - Dashboard KPI-ok és grafikonok
-  - Projektek listázása és Kanban pipeline (4 státusz oszlop)
-  - Értesítések oldal és számláló
-  - FormSettingsDialog (Select.Item hiba javítva)
-  - Google Sheets integráció (14 sor találva a teszt táblázatban)
-  - Próbák fül: Admin létrehozhat, Toborzó csak olvashat
-  - Sötét mód működik
+### 2026-02-26 - Bulk Email Modul ✅
+- **Bulk Email menüpont** hozzáadva
+- **Gmail OAuth integráció** - minden felhasználó saját Gmail fiókját kapcsolhatja
+- **Email sablonok** - felhasználónként külön (nem látják egymásét)
+- **Dolgozó sablonok** - mentett szűrések gyors kiválasztáshoz
+- **Kampány rendszer** - automatikus sorban állás, 500 email/nap limit
+- **24 órás számláló** - látható mennyi email küldhető még
+- **Leiratkozás link** - minden emailben egyedi link, dolgozó megjelölése
+- **Leiratkozás oldal** - /leiratkozas/{token}
 
-### Korábbi munkamenetek
-- Státusz szinkronizáció rendszer
-- Projekt+Pozíció kötelező választás
-- Dashboard implementáció (admin/toborzó specifikus)
-- Duplikációkezelés űrlap jelentkezőknél
-- Jogosultsági rendszer finomhangolás
-- Értesítési számláló javítás
-- Dark mode UI javítások
+### 2026-02-26 - Pozíció jogosultság ✅
+- Toborzók csak megtekinthetik a pozíciókat (nem hozhatnak létre/szerkeszthetnek)
 
-## Egységes Státuszok
-| Státusz | Szín | Leírás |
-|---------|------|--------|
-| Feldolgozatlan | szürke | Még nem feldolgozott |
-| Próbára vár | narancs | Próbára vár |
-| Próba megbeszélve | lila | Próba időpont megbeszélve |
-| Dolgozik | zöld | Aktív dolgozó |
-| Tiltólista | piros | Nem dolgozhat |
+### 2026-02-26 - UI módosítások ✅
+- "Jó úton vagy! 🎉" sor eltávolítva toborzó dashboardból
+- Böngésző tab cím: "Dolgozó CRM"
 
-## API Végpontok
-- `POST /api/auth/login` - Bejelentkezés
-- `GET /api/dashboard/admin-stats` - Admin dashboard statisztikák
-- `GET /api/dashboard/recruiter-stats` - Toborzó dashboard statisztikák
-- `GET /api/projects` - Projektek listázása
-- `GET /api/projects/{id}` - Projekt részletek
-- `POST /api/projects/{id}/workers` - Dolgozó hozzáadása projekthez
-- `GET /api/notifications` - Értesítések
-- `POST /api/forms/test-connection` - Google Sheets kapcsolat teszt
+### Korábbi - E2E Tesztelés ✅
+- Backend: 24/24 teszt sikeres
+- Frontend: összes funkció működik
 
-## Teszt Eredmények (2026-02-26)
-- **Backend:** 100% ✅ (24/24 teszt)
-- **Frontend:** 100% ✅ (összes tesztelt funkció működik)
-- **Teszt fájlok:** `/app/backend/tests/test_crm_api.py`, `/app/test_reports/iteration_11.json`
+## API Végpontok - Bulk Email
+
+| Endpoint | Leírás |
+|----------|--------|
+| `GET /api/bulk-email/gmail/auth-url` | Gmail OAuth URL |
+| `GET /api/oauth/gmail/callback` | OAuth callback |
+| `GET /api/bulk-email/gmail/status` | Gmail státusz + napi számláló |
+| `DELETE /api/bulk-email/gmail/disconnect` | Gmail leválasztás |
+| `GET/POST/PUT/DELETE /api/bulk-email/templates` | Email sablonok CRUD |
+| `GET/POST/PUT/DELETE /api/bulk-email/worker-templates` | Dolgozó sablonok CRUD |
+| `GET/POST /api/bulk-email/campaigns` | Kampányok |
+| `PUT /api/bulk-email/campaigns/{id}/pause` | Kampány szüneteltetés |
+| `PUT /api/bulk-email/campaigns/{id}/resume` | Kampány folytatás |
+| `POST /api/leiratkozas/{token}` | Leiratkozás feldolgozás |
 
 ## Prioritás Lista
 
 ### P0 - Kész ✅
-- [x] E2E tesztelés
-- [x] FormSettingsDialog Select.Item hiba javítás
-- [x] Google Sheets integráció
-- [x] Jogosultsági rendszer (Próbák fül)
-- [x] Értesítési számláló
+- [x] Bulk Email modul
+- [x] Gmail OAuth integráció
+- [x] Email/Dolgozó sablonok
+- [x] Kampány rendszer 500/nap limittel
+- [x] Leiratkozás funkció
+- [x] Pozíció jogosultság (toborzó read-only)
 
-### P1 - Későbbi / Refaktorálás
-- [ ] ProjectDetailPage.js refaktorálása (~2800 sor → kisebb komponensek)
-- [ ] Session management javítása
-- [ ] Tiltólista dolgozók exportálása
+### P1 - Várakozik (felhasználói beállítás kell)
+- [ ] Google Cloud Console credentials beállítása (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
+
+### P2 - Későbbi
+- [ ] ProjectDetailPage.js refaktorálása (~2800 sor)
+- [ ] Email megnyitás tracking (opcionális)
