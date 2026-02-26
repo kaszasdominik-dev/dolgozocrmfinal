@@ -332,6 +332,32 @@ export default function BulkEmailPage() {
       setActiveTab("settings");
       return;
     }
+    
+    // Check how many selected workers have email
+    const selectedWorkers = workers.filter(w => selectedWorkerIds.includes(w.id));
+    const withEmail = selectedWorkers.filter(w => w.email && w.email.trim() !== "");
+    const withoutEmail = selectedWorkers.length - withEmail.length;
+    
+    if (withoutEmail > 0) {
+      const confirmRemove = window.confirm(
+        `${withEmail.length}/${selectedWorkers.length} dolgozónak van email címe.\n\n` +
+        `${withoutEmail} dolgozónak nincs email címe.\n\n` +
+        `Eltávolítod őket a kijelölésből?`
+      );
+      
+      if (confirmRemove) {
+        // Remove workers without email from selection
+        const idsWithEmail = withEmail.map(w => w.id);
+        setSelectedWorkerIds(idsWithEmail);
+        toast.success(`${withoutEmail} dolgozó eltávolítva a kijelölésből`);
+      }
+      
+      if (withEmail.length === 0) {
+        toast.error("Nincs kiválasztott dolgozó email címmel!");
+        return;
+      }
+    }
+    
     setCampaignForm({
       name: `Kampány ${new Date().toLocaleDateString('hu-HU')}`,
       email_template_id: "",
