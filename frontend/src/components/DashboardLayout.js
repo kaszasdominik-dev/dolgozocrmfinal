@@ -26,7 +26,8 @@ import {
   Bell,
   PanelLeftClose,
   PanelLeft,
-  BookOpen
+  BookOpen,
+  Mail
 } from "lucide-react";
 
 // Sidebar collapse state persistence
