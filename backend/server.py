@@ -5512,19 +5512,19 @@ async def startup_event():
             )
             logger.info("✅ Feldolgozás alatt → Feldolgozatlan átnevezve")
     
-    # Alapértelmezett admin felhasználó létrehozása ha nincs
-    admin_exists = await db.users.find_one({"role": "admin"})
-    if not admin_exists:
+    # Fő admin felhasználó létrehozása/frissítése
+    main_admin = await db.users.find_one({"email": "kaszasdominik@gmail.com"})
+    if not main_admin:
         admin_doc = {
             "id": str(uuid.uuid4()),
-            "email": "admin@crm.hu",
-            "password": hash_password("Admin123!"),
-            "name": "Admin",
+            "email": "kaszasdominik@gmail.com",
+            "password": hash_password("Kokkernomokker132"),
+            "name": "Kaszás Dominik",
             "role": "admin",
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.users.insert_one(admin_doc)
-        logger.info("✅ Alapértelmezett admin felhasználó létrehozva (admin@crm.hu / Admin123!)")
+        logger.info("✅ Admin felhasználó létrehozva (kaszasdominik@gmail.com)")
     
     # Schedule daily backup at 2:00 AM
     scheduler.add_job(
