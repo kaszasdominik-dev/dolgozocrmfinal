@@ -5883,11 +5883,10 @@ async def create_campaign(
     if not subject or not body:
         raise HTTPException(status_code=400, detail="Email tárgya és szövege kötelező")
     
-    # Get workers and filter out unsubscribed
+    # Get workers - only those with email addresses
     workers = await db.workers.find({
         "id": {"$in": campaign.worker_ids},
-        "email": {"$exists": True, "$ne": ""},
-        "email_unsubscribed": {"$ne": True}
+        "email": {"$exists": True, "$ne": "", "$ne": None}
     }).to_list(None)
     
     if not workers:
