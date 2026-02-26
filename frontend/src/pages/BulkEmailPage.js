@@ -626,7 +626,7 @@ export default function BulkEmailPage() {
                   </TableHeader>
                   <TableBody>
                     {filteredWorkers.slice(0, 100).map(worker => (
-                      <TableRow key={worker.id}>
+                      <TableRow key={worker.id} className={!worker.email ? "opacity-50" : ""}>
                         <TableCell>
                           <Checkbox
                             checked={selectedWorkerIds.includes(worker.id)}
@@ -634,7 +634,13 @@ export default function BulkEmailPage() {
                           />
                         </TableCell>
                         <TableCell className="font-medium">{worker.name}</TableCell>
-                        <TableCell>{worker.email}</TableCell>
+                        <TableCell>
+                          {worker.email ? (
+                            worker.email
+                          ) : (
+                            <span className="text-muted-foreground italic text-xs">nincs email</span>
+                          )}
+                        </TableCell>
                         <TableCell>{worker.phone}</TableCell>
                         <TableCell>
                           <Badge variant="secondary">{worker.category || "-"}</Badge>
