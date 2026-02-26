@@ -1586,19 +1586,23 @@ export default function ProjectDetailPage() {
         {/* Positions Tab */}
         <TabsContent value="positions" className="p-0 mt-0">
           <div className="p-3 border-b border-border flex items-center justify-between">
-            <span className="font-semibold text-sm text-foreground">Pozíciók kezelése</span>
-            <Button variant="outline" size="sm" onClick={() => openPositionDialog()} data-testid="add-position-btn">
-              <Plus className="w-4 h-4 mr-1" />Új pozíció
-            </Button>
+            <span className="font-semibold text-sm text-foreground">Pozíciók {user?.role === "admin" ? "kezelése" : "megtekintése"}</span>
+            {user?.role === "admin" && (
+              <Button variant="outline" size="sm" onClick={() => openPositionDialog()} data-testid="add-position-btn">
+                <Plus className="w-4 h-4 mr-1" />Új pozíció
+              </Button>
+            )}
           </div>
 
           {project.positions?.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               <Briefcase className="w-12 h-12 mx-auto mb-2 text-muted-foreground/50" />
               <p>Még nincs pozíció létrehozva</p>
-              <Button variant="outline" size="sm" className="mt-2" onClick={() => openPositionDialog()}>
-                <Plus className="w-4 h-4 mr-1" />Első pozíció létrehozása
-              </Button>
+              {user?.role === "admin" && (
+                <Button variant="outline" size="sm" className="mt-2" onClick={() => openPositionDialog()}>
+                  <Plus className="w-4 h-4 mr-1" />Első pozíció létrehozása
+                </Button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
@@ -1611,12 +1615,16 @@ export default function ProjectDetailPage() {
                         <Badge variant="secondary" className="text-xs">
                           {pos.headcount} fő
                         </Badge>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openPositionDialog(pos)}>
-                          <Edit2 className="w-3 h-3" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeletePosition(pos.id)}>
-                          <X className="w-3 h-3" />
-                        </Button>
+                        {user?.role === "admin" && (
+                          <>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openPositionDialog(pos)}>
+                              <Edit2 className="w-3 h-3" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeletePosition(pos.id)}>
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
