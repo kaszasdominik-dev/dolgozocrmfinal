@@ -165,6 +165,7 @@ export default function WorkersPage() {
       if (hasCarFilter) params.append("has_car", hasCarFilter);
       if (globalStatusFilter) params.append("global_status", globalStatusFilter);
       if (propertyFilter) params.append("property_filter", propertyFilter);
+      if (genderFilter) params.append("gender", genderFilter);  // ÚJ: Nem szűrő
       if (dateFrom) params.append("date_from", dateFrom);
       if (dateTo) params.append("date_to", dateTo);
       // Projekt státusz szűrő
@@ -200,7 +201,7 @@ export default function WorkersPage() {
       setLoading(false);
     }
   }, [search, typeFilter, tagFilter, ownerFilter, countyFilter, positionFilter, 
-      workTypeFilter, hasCarFilter, globalStatusFilter, propertyFilter, dateFrom, dateTo, centerLat, centerLon, 
+      workTypeFilter, hasCarFilter, globalStatusFilter, propertyFilter, genderFilter, dateFrom, dateTo, centerLat, centerLon, 
       radiusKm, locationEnabled, filterProjectId, projectStatusFilter, user?.role]);
 
   useEffect(() => {
