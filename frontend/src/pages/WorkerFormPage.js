@@ -510,12 +510,12 @@ export default function WorkerFormPage() {
               <Textarea value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})} placeholder="Egyéb..." rows={2} data-testid="worker-notes-input" />
             </div>
 
-            {/* Projekt hozzáadás - csak új dolgozónál */}
-            {!isEdit && (
+            {/* CSAK EDIT MODE-BAN: Projekthez hozzáadás */}
+            {isEdit && (
               <div className="border-t border-border pt-4 mt-4 space-y-3">
                 <div className="flex items-center gap-2 mb-2">
                   <FolderPlus className="w-4 h-4 text-primary" />
-                  <h3 className="text-sm font-semibold text-foreground">Projekt hozzárendelés (opcionális)</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Projekthez hozzáadás</h3>
                 </div>
                 
                 <div className="space-y-3">
