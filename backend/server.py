@@ -822,18 +822,20 @@ def detect_gender_from_name(full_name: str) -> Optional[str]:
     if "né" in name_lower or " né " in name_lower:
         return "nő"
     
-    # 2. Keresztnév kinyerése (általában az első vagy második szó)
+    # 2. Keresztnév kinyerése
+    # Magyarországon: Vezetéknév Keresztnév (pl. Kiss János)
+    # De néha fordított sorrendben írják: Keresztnév Vezetéknév
     words = name_lower.split()
     if len(words) == 0:
         return None
     
-    # Próbáljuk meg mindkét irányból (Vezetéknév Keresztnév ÉS Keresztnév Vezetéknév)
+    # Stratégia: Próbáljuk meg mindkét szót, de a MÁSODIK szót először (mert általában az a keresztnév)
     first_names_to_check = []
     
-    # Ha 2+ szó van, mindkét szót ellenőrizzük
     if len(words) >= 2:
-        first_names_to_check = [words[0], words[1]]
-    else:
+        # Magyar sorrend: második szó (keresztnév) először, aztán első szó (vezetéknév - ritkábban keresztnév)
+        first_names_to_check = [words[1], words[0]]
+    elif len(words) == 1:
         first_names_to_check = [words[0]]
     
     # Ha bármelyik szó megtalálható a névlistában
