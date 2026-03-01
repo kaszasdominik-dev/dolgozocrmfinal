@@ -1489,7 +1489,21 @@ async def get_workers(
     
     # Enrich with type names, tags, project statuses
     result = []
+    
+    # ÚJ: Blacklist lekérése a user számára (ha nem admin)
+    user_blacklist_worker_ids = []
+    if user["role"] != "admin":
+        blacklist_entries = await db.user_blacklist.find(
+            {"user_id": user["id"]},
+            {"_id": 0, "worker_id": 1}
+        ).to_list(1000)
+        user_blacklist_worker_ids = [entry["worker_id"] for entry in blacklist_entries]
+    
     for w in workers:
+        # ÚJ: Kiszűrjük a blacklist-elt dolgozókat (csak toborzóknál, admin mindent lát!)
+        if user["role"] != "admin" and w["id"] in user_blacklist_worker_ids:
+            continue
+        
         # Get type name
         type_doc = await db.worker_types.find_one({"id": w.get("worker_type_id")}, {"_id": 0})
         w["worker_type_name"] = type_doc["name"] if type_doc else ""
