@@ -873,6 +873,110 @@ export default function WorkerFormPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* CV Import Dialog */}
+      <Dialog open={cvImportDialog} onOpenChange={setCvImportDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              CV/Excel Import AI-val
+            </DialogTitle>
+            <DialogDescription>
+              Töltsd fel a CV-t vagy Excel-t, és az AI automatikusan kinyeri az adatokat!
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Támogatott fájlok */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                📄 Támogatott fájlok:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {['PDF', 'DOCX', 'TXT', 'XLSX', 'XLS'].map(type => (
+                  <span key={type} className="text-xs bg-white dark:bg-blue-950 px-2 py-1 rounded border border-blue-200 dark:border-blue-800">
+                    {type}
+                  </span>
+                ))}
+              </div>
+            </div>
+            
+            {/* Fájl feltöltés */}
+            <div className="space-y-2">
+              <Label className="text-sm">Válassz fájlt</Label>
+              <div className="flex gap-2">
+                <Input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.txt,.xlsx,.xls"
+                  onChange={handleCvFileSelect}
+                  className="flex-1"
+                />
+                {cvFile && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setCvFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+              {cvFile && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <FileText className="w-3 h-3" />
+                  {cvFile.name} ({(cvFile.size / 1024).toFixed(1)} KB)
+                </p>
+              )}
+            </div>
+            
+            {/* Mit kinyeri az AI */}
+            <div className="bg-muted/50 rounded-lg p-3">
+              <p className="text-sm font-medium mb-2">🤖 Az AI kinyeri:</p>
+              <ul className="text-xs text-muted-foreground space-y-1">
+                <li>✅ Név, telefonszám, email</li>
+                <li>✅ Lakcím</li>
+                <li>✅ Pozíció/szakma</li>
+                <li>✅ Tapasztalat (években)</li>
+                <li>✅ Készségek</li>
+                <li>✅ Nem (AI gender detection)</li>
+              </ul>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setCvImportDialog(false);
+              setCvFile(null);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+            }}>
+              Mégse
+            </Button>
+            <Button 
+              onClick={handleCvParse} 
+              disabled={!cvFile || cvParsing}
+              className="gap-2"
+            >
+              {cvParsing ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  AI elemzés...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Elemzés AI-val
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
