@@ -259,6 +259,78 @@ export default function WorkerFormPage() {
     setPendingStatus("");
   };
   
+  // CV Import funkcionalitás
+  const handleCvFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const validTypes = ['.pdf', '.docx', '.txt', '.xlsx', '.xls'];
+    const isValid = validTypes.some(ext => file.name.toLowerCase().endsWith(ext));
+    
+    if (!isValid) {
+      toast.error("Csak PDF, DOCX, TXT, XLSX, XLS fájlok támogatottak");
+      return;
+    }
+    
+    setCvFile(file);
+  };
+  
+  const handleCvParse = async () => {
+    if (!cvFile) {
+      toast.error("Válassz ki egy fájlt");
+      return;
+    }
+    
+    setCvParsing(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append("file", cvFile);
+      
+      const res = await axios.post(`${API}/workers/import/cv-parse`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      
+      const extracted = res.data.extracted_data;
+      
+      // Kitöltjük az űrlapot az AI által kinyert adatokkal
+      setFormData(prev => ({
+        ...prev,
+        name: extracted.name || prev.name,
+        phone: extracted.phone || prev.phone,
+        email: extracted.email || prev.email,
+        address: extracted.address || prev.address,
+        position: extracted.position || prev.position,
+        experience: extracted.experience || prev.experience,
+        notes: extracted.notes 
+          ? (prev.notes ? `${prev.notes}\n\n${extracted.notes}` : extracted.notes)
+          : prev.notes
+      }));
+      
+      // Ha van skills, azt is hozzáadjuk a notes-hoz
+      if (extracted.skills && extracted.skills.length > 0) {
+        const skillsText = `Készségek: ${extracted.skills.join(', ')}`;
+        setFormData(prev => ({
+          ...prev,
+          notes: prev.notes 
+            ? `${prev.notes}\n\n${skillsText}` 
+            : skillsText
+        }));
+      }
+      
+      toast.success("✅ CV sikeresen elemezve AI-val! Ellenőrizd és módosítsd az adatokat.");
+      setCvImportDialog(false);
+      setCvFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      
+    } catch (e) {
+      console.error("CV parse error:", e);
+      toast.error(e.response?.data?.detail || "Hiba a CV feldolgozása során");
+    } finally {
+      setCvParsing(false);
+    }
+  };
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     
