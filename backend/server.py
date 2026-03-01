@@ -6905,19 +6905,25 @@ async def gdpr_export_worker_data(
 
 @api_router.get("/admin/workers/old-workers")
 async def get_old_workers(
-    user: dict = Depends(require_admin)
+    user: dict = Depends(get_current_user)
 ):
     """
     2 éves vagy régebbi dolgozók listázása (GDPR adatmegőrzés)
-    Admin látja mely dolgozókat kellene törölni
+    - Admin látja MINDEN dolgozót
+    - Recruiter csak a SAJÁT dolgozóit látja
     """
     # 2 éve (730 nap)
     two_years_ago = datetime.now(timezone.utc) - timedelta(days=730)
     two_years_ago_iso = two_years_ago.isoformat()
     
+    # Query építés: admin vs recruiter
+    query = {"created_at": {"$lt": two_years_ago_iso}}
+    if user["role"] != "admin":
+        query["owner_id"] = user["id"]  # Recruiter csak a saját dolgozóit látja
+    
     # Dolgozók akik 2+ éve lettek létrehozva
     old_workers = await db.workers.find(
-        {"created_at": {"$lt": two_years_ago_iso}},
+        query,
         {"_id": 0}
     ).sort("created_at", 1).to_list(10000)
     
@@ -6962,7 +6968,7 @@ async def get_old_workers(
         "old_workers": result,
         "total_count": len(result),
         "cutoff_date": two_years_ago_iso,
-        "message": f"{len(result)} dolgozó van 2+ éves az adatbázisban"
+        "message": f"{len(result)} dolgozó van 2+ éves" + (" (csak te saját dolgozóid)" if user["role"] != "admin" else " (minden dolgozó)")
     }
 
 
