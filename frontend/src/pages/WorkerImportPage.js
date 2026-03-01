@@ -499,49 +499,116 @@ export default function WorkerImportPage() {
         </Card>
       )}
 
-      {/* Step 4: Result */}
-      {step === 4 && importResult && (
+      {/* Step 4: Result / Processing */}
+      {step === 4 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-green-600" />
-              Import befejezve
+              {importing || jobStatus?.status === "processing" ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                  Import folyamatban
+                </>
+              ) : jobStatus?.status === "completed" ? (
+                <>
+                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  Import befejezve
+                </>
+              ) : jobStatus?.status === "failed" ? (
+                <>
+                  <AlertCircle className="w-5 h-5 text-destructive" />
+                  Import hiba
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  Import befejezve
+                </>
+              )}
             </CardTitle>
+            {jobStatus && (
+              <CardDescription>
+                {jobStatus.status === "processing" 
+                  ? `🤖 AI gender detection folyamatban... (${jobStatus.processed || 0}/${jobStatus.total || 0})`
+                  : jobStatus.status === "completed"
+                  ? `✅ ${jobStatus.imported} dolgozó sikeresen importálva és nemük AI-val beazonosítva!`
+                  : "Import feldolgozás"}
+              </CardDescription>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 text-center">
-                <p className="text-3xl font-bold text-green-600">{importResult.imported}</p>
-                <p className="text-sm text-green-700 dark:text-green-400">Sikeresen importálva</p>
+            {/* Progress Bar - csak processing közben */}
+            {(importing || jobStatus?.status === "processing") && jobStatus && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Feldolgozás</span>
+                  <span className="font-medium">{progressPercent}%</span>
+                </div>
+                <Progress value={progressPercent} className="h-2" />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{jobStatus.processed || 0} / {jobStatus.total || 0} dolgozó</span>
+                  <span>{jobStatus.imported || 0} importálva • {jobStatus.skipped || 0} átugorva</span>
+                </div>
               </div>
-              <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 text-center">
-                <p className="text-3xl font-bold text-amber-600">{importResult.skipped}</p>
-                <p className="text-sm text-amber-700 dark:text-amber-400">Kihagyva</p>
-              </div>
-            </div>
+            )}
 
-            {importResult.errors?.length > 0 && (
+            {/* Eredmény - ha kész */}
+            {(jobStatus?.status === "completed" || importResult) && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 text-center">
+                  <p className="text-3xl font-bold text-green-600">
+                    {jobStatus?.imported || importResult?.imported || 0}
+                  </p>
+                  <p className="text-sm text-green-700 dark:text-green-400">Sikeresen importálva</p>
+                </div>
+                <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 text-center">
+                  <p className="text-3xl font-bold text-amber-600">
+                    {jobStatus?.skipped || importResult?.skipped || 0}
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-400">Kihagyva</p>
+                </div>
+              </div>
+            )}
+
+            {/* Hibák megjelenítése */}
+            {(jobStatus?.errors?.length > 0 || importResult?.errors?.length > 0) && (
               <div className="space-y-2">
                 <Label className="text-sm flex items-center gap-1">
                   <AlertCircle className="w-4 h-4 text-destructive" />
                   Hibák
                 </Label>
                 <div className="bg-destructive/10 rounded-lg p-3 max-h-32 overflow-auto">
-                  {importResult.errors.map((err, idx) => (
+                  {(jobStatus?.errors || importResult?.errors || []).map((err, idx) => (
                     <p key={idx} className="text-xs text-destructive">{err}</p>
                   ))}
                 </div>
               </div>
             )}
+            
+            {/* AI info banner */}
+            {jobStatus?.status === "completed" && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-blue-900 dark:text-blue-100">AI Gender Detection alkalmazva</p>
+                  <p className="text-blue-700 dark:text-blue-300 text-xs mt-0.5">
+                    Minden dolgozó neme automatikusan AI-val azonosításra került (96-100% pontosság)
+                  </p>
+                </div>
+              </div>
+            )}
 
-            <div className="flex justify-between pt-4">
-              <Button variant="outline" onClick={resetImport}>
-                Új import
-              </Button>
-              <Button onClick={() => navigate("/workers")} className="bg-primary">
-                Dolgozók megtekintése
-              </Button>
-            </div>
+            {/* Gombok */}
+            {!importing && jobStatus?.status !== "processing" && (
+              <div className="flex justify-between pt-4">
+                <Button variant="outline" onClick={resetImport}>
+                  Új import
+                </Button>
+                <Button onClick={() => navigate("/workers")} className="bg-primary">
+                  Dolgozók megtekintése
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
