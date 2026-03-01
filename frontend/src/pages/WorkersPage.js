@@ -361,6 +361,7 @@ export default function WorkersPage() {
     setHasCarFilter("");
     setGlobalStatusFilter("");
     setPropertyFilter("");
+    setGenderFilter("");  // ÚJ
     setDateFrom("");
     setDateTo("");
     setLocationEnabled(false);
