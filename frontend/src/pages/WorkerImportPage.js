@@ -235,11 +235,22 @@ export default function WorkerImportPage() {
   };
 
   const resetImport = () => {
+    // Polling leállítása
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    
     setStep(1);
     setFile(null);
     setPreviewData(null);
     setColumnMapping({});
     setImportResult(null);
+    setJobId(null);
+    setJobStatus(null);
+    setProgressPercent(0);
+    setImporting(false);
+    
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
