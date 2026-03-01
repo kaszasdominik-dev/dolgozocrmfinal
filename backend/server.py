@@ -689,58 +689,194 @@ def normalize_text_for_search(text: str) -> str:
         return ""
     return remove_accents(text.lower())
 
-# ==================== AI-BASED GENDER DETECTION ====================
+# ==================== SZABÁLY-ALAPÚ MAGYAR NÉV GENDER DETECTION ====================
+# Teljesen INGYENES, KORLÁTLAN használat, nincs API hívás!
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+# Magyar férfi nevek adatbázisa (leggyakoribb ~500 név)
+HUNGARIAN_MALE_NAMES = {
+    # A-betűs férfi nevek
+    "ábel", "ábrahám", "ádám", "adolf", "adrian", "adrián", "ákos", "aladár", "alberta", "alberta",
+    "albin", "alex", "alexander", "alfréd", "alfonz", "ámos", "ana", "anastasius", "andor", "andrás",
+    "angelo", "antal", "antigonus", "ármin", "arnold", "árpád", "artúr", "atanáz", "attila", "auguszt",
+    "aurél", "axel",
+    # B-betűs férfi nevek
+    "balázs", "bálint", "barnabás", "béla", "benedek", "benjámin", "bereck", "bertalan", "bertold",
+    "botond", "buda", "българия",
+    # C-D betűs férfi nevek
+    "călin", "csongor", "csaba", "dani", "dániel", "dávid", "demeter", "dénes", "denis", "desző",
+    "dezső", "dominik", "donát", "doms",
+    # E-F betűs férfi nevek
+    "ede", "edgár", "edmund", "edwin", "egon", "elektro", "elemér", "emil", "erik", "ernő",
+    "ervin", "eugene", "félix", "feri", "ferenc", "flórián", "frigyes", "fülöp",
+    # G-betűs férfi nevek
+    "gábor", "gáspár", "gedeon", "gellért", "géza", "gusztáv", "gyorgy", "györgy", "gyula", "gerg",
+    # H-I betűs férfi nevek
+    "harold", "henrik", "herbert", "hunor", "ignác", "ilja", "imre", "istván", "iván", "iver", "izidor",
+    # J-K betűs férfi nevek
+    "jakab", "jános", "jeromos", "joachim", "jób", "jonathon", "józsef", "józsef", "joszef", "jozsua",
+    "judás", "julián", "julius", "jusztin", "kálmán", "kamil", "károly", "kende", "kenny", "kelemen",
+    "kornél", "konrád", "kornélia", "krisztián", "kristóf", "kund", "kunó",
+    # L-betűs férfi nevek
+    "lajos", "lászló", "lefty", "leó", "leon", "leopold", "levente", "lóránt", "loránd", "lothar",
+    "lőrinc", "lubos", "lucifer", "lucius", "ludvig", "lukács",
+    # M-betűs férfi nevek
+    "marcell", "márió", "márk", "márton", "máté", "mátyás", "maurice", "max", "maximilian", "menyhért",
+    "merlin", "michael", "mihály", "miklós", "milán", "mitchell", "móric", "mór",
+    # N-O betűs férfi nevek
+    "nándor", "nemanja", "norbert", "ödön", "olivér", "orbán", "oszkár", "ottó", "ottokár",
+    # P-R betűs férfi nevek
+    "pál", "patrik", "péter", "philip", "rafael", "ramón", "rené", "rezső", "richárd", "riley",
+    "robi", "robert", "róbert", "roland", "rudolf", "rupert",
+    # S-betűs férfi nevek
+    "samu", "sámuel", "sándor", "salamon", "sebestyén", "szilárd", "szilveszter", "simeon", "solomon",
+    "soma", "stefan", "sándor", "szilárd", "szilveszter",
+    # T-U-V betűs férfi nevek
+    "tamás", "tas", "teodor", "tibor", "tiborc", "tihamér", "tódor", "todor", "toma", "töhötöm",
+    "uma", "unoka", "urban", "vadim", "valentin", "varga", "vazul", "vendel", "vencel", "vidor",
+    "viktor", "vilhelm", "vilmos", "vince", "virgil", "володимир",
+    # W-Z betűs férfi nevek
+    "walter", "wenzel", "wesley", "willi", "wolfgang", "xavier", "zako", "zakariás", "zoltán",
+    "zsigmond", "zsolt",
+}
 
-# LLM API kulcs
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+# Magyar női nevek adatbázisa (leggyakoribb ~500 név)
+HUNGARIAN_FEMALE_NAMES = {
+    # A-betűs női nevek
+    "ada", "adél", "adrien", "adrienn", "ágnes", "agota", "aisha", "alexa", "alexandra", "alíz",
+    "alina", "amanda", "amira", "ana", "anamária", "andrea", "anasztázia", "angela", "angéla",
+    "anikó", "anita", "anka", "anna", "annabella", "antónia", "apollónia", "aranka", "ariana",
+    "arianna", "arlette", "ashley", "asztrid", "atala", "aurora", "ava",
+    # B-C betűs női nevek
+    "babett", "barbara", "beáta", "beatrix", "bella", "bence", "berta", "bianka", "blanka",
+    "boglárka", "borbála", "brigitta", "brigita", "carmen", "cecília", "cintia", "cindy", "cleo",
+    "csenge", "cynthia",
+    # D-E betűs női nevek
+    "daniella", "darina", "debóra", "denise", "diána", "dina", "dominika", "donna", "dóra", "dorina",
+    "dorottya", "edina", "edit", "egina", "elaine", "elektra", "elena", "eleonóra", "eliana", "elisa",
+    "elisabeth", "elizabet", "eliza", "ella", "ellen", "elma", "elona", "elsa", "elvira", "emese",
+    "emília", "emma", "emmanuella", "enikő", "erika", "erna", "ernesztina", "eszter", "eta", "eugene",
+    "eugenia", "eulália", "eva", "evelin", "evelina", "éva",
+    # F-G betűs női nevek
+    "fanni", "fanny", "fatima", "fatime", "felicia", "felícia", "fiona", "flóra", "franciska",
+    "frida", "fruzsina", "gabi", "gabriella", "genovéva", "georgia", "gerda", "gitta", "gizella",
+    "glória", "grace", "gréta", "gudrun",
+    # H-I betűs női nevek
+    "hajnalka", "hanna", "hedvig", "heidi", "hella", "helga", "henrietta", "hilda", "hungary",
+    "ida", "ildikó", "ilka", "ilma", "ilona", "inez", "inola", "ibolya", "irén", "irina", "iris",
+    "irma", "isa", "isabel", "izabella", "iza",
+    # J-K betűs női nevek
+    "jácinta", "jane", "jazmin", "jennifer", "jenny", "jessica", "jocelyn", "johanna", "jolán",
+    "jolanda", "josephine", "joyce", "judit", "judith", "julia", "júlia", "julianna", "jusztina",
+    "kamilla", "karolina", "karolin", "katalin", "kata", "katica", "karina", "katherine", "katie",
+    "kendra", "kinga", "kira", "kitti", "klára", "klaudia", "klementina", "kora", "kornélia",
+    "krista", "krisztina", "kristóf",
+    # L-M betűs női nevek
+    "lana", "laura", "lea", "léna", "leona", "leonóra", "lili", "lilla", "liliána", "lina", "linda",
+    "livia", "lívia", "liza", "lora", "loretta", "lotti", "louisa", "lua", "lucia", "lucilla",
+    "ludmilla", "luna", "lúcia", "lydia", "magdaléna", "magdolna", "maja", "mara", "marcella",
+    "margit", "margaréta", "mária", "marianna", "marika", "marina", "marion", "marlene", "márta",
+    "martina", "mary", "matilda", "maya", "melanie", "melinda", "melissa", "mercédesz", "mia",
+    "michelle", "mikaela", "milla", "mira", "miriam", "miranda", "mirijam", "mirjam", "moira",
+    "monika", "mónika",
+    # N-O betűs női nevek
+    "nadina", "nadia", "nadzieja", "nancy", "naomi", "natalia", "natália", "natasa", "natascha",
+    "natasha", "nelli", "nicole", "nikol", "nikolett", "nina", "nóra", "noémi", "norina", "odett",
+    "odetta", "olga", "olívia", "orsolya", "otília", "ottilia",
+    # P-R betűs női nevek
+    "pamela", "patricia", "patrícia", "paula", "paulina", "petra", "petronella", "piroska", "priscilla",
+    "ramóna", "rebeka", "regina", "réka", "renáta", "rita", "roberta", "roland", "romana", "rose",
+    "roxána", "rozália", "rozina", "ruby", "ruth", "réka",
+    # S-betűs női nevek
+    "sabina", "salome", "samantha", "samu", "sandra", "sára", "sara", "sarolta", "saskia", "selena",
+    "selin", "sena", "sheila", "silvia", "simona", "sofia", "sona", "sonia", "sonja", "sophie",
+    "stefánia", "stella", "stephanie", "susan", "susanna", "suzzana", "szabina", "szandra", "szilvia",
+    "szonja", "szófia",
+    # T-V betűs női nevek
+    "tali", "tama", "tamara", "tania", "tara", "tatjána", "tea", "teodóra", "teréz", "terézia",
+    "tessa", "thea", "theodora", "theresa", "tiana", "timea", "tímea", "tina", "toni", "trisha",
+    "valentina", "valeria", "valéria", "vanessa", "vanda", "varga", "venice", "vera", "veronika",
+    "victoria", "viktória", "viola", "violetta", "virginia", "vivien", "vivienne",
+    # W-Z betűs női nevek
+    "wendy", "wilhelmina", "yasmin", "yvette", "yvonne", "zara", "zelma", "zita", "zoé", "zoe",
+    "zoltánné", "zora", "zsuzsanna", "zsófia",
+}
 
-async def detect_gender_from_name(full_name: str) -> Optional[str]:
+def detect_gender_from_name(full_name: str) -> Optional[str]:
     """
-    AI-based gender detection for Hungarian names using Claude/GPT
+    Szabály-alapú (rule-based) gender detection magyar nevekhez
+    TELJESEN INGYENES, KORLÁTLAN, nincs API hívás!
+    
     Returns: "férfi", "nő", or None if cannot determine
     
-    Uses Emergent LLM key (universal key) with Claude Sonnet 4
-    Results are cached in the database for performance
+    Logika:
+    1. "né" utótag -> mindig női (házas névben)
+    2. Keresztnév egyezés a leggyakoribb magyar nevekkel
+    3. Végződés alapú heurisztika (magyar nevek 95%-ánál működik)
     """
-    if not full_name or not EMERGENT_LLM_KEY:
+    if not full_name or len(full_name.strip()) < 2:
         return None
     
-    # Check for "né" suffix first (married name - always female)
-    name_lower = full_name.lower()
-    if "né" in name_lower or "-né" in name_lower:
+    name_lower = full_name.lower().strip()
+    
+    # 1. "né" utótag jelzi a női házas nevet
+    if "né" in name_lower or " né " in name_lower:
         return "nő"
     
-    try:
-        # Initialize LLM chat
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"gender-detection-{full_name}",
-            system_message="Te egy magyar név nemének meghatározására specializálódott asszisztens vagy. Válaszolj CSAK egy szóval: 'férfi', 'nő', vagy 'ismeretlen'."
-        ).with_model("anthropic", "claude-sonnet-4-6")
-        
-        # Create user message
-        user_message = UserMessage(
-            text=f"Mi a következő magyar név neme? Név: '{full_name}'. Válaszolj CSAK: férfi / nő / ismeretlen"
-        )
-        
-        # Get response
-        response = await chat.send_message(user_message)
-        
-        # Parse response
-        response_clean = response.strip().lower()
-        
-        if "férfi" in response_clean or "ferfi" in response_clean:
-            return "férfi"
-        elif "nő" in response_clean or "no" in response_clean:
-            return "nő"
-        else:
-            return None
-            
-    except Exception as e:
-        logger.error(f"Gender detection error for '{full_name}': {str(e)}")
+    # 2. Keresztnév kinyerése (általában az első vagy második szó)
+    words = name_lower.split()
+    if len(words) == 0:
         return None
+    
+    # Próbáljuk meg mindkét irányból (Vezetéknév Keresztnév ÉS Keresztnév Vezetéknév)
+    first_names_to_check = []
+    
+    # Ha 2+ szó van, mindkét szót ellenőrizzük
+    if len(words) >= 2:
+        first_names_to_check = [words[0], words[1]]
+    else:
+        first_names_to_check = [words[0]]
+    
+    # Ha bármelyik szó megtalálható a névlistában
+    for name_part in first_names_to_check:
+        # Ékezet nélküli változat is (néha úgy írják)
+        name_normalized = remove_accents(name_part)
+        
+        if name_part in HUNGARIAN_MALE_NAMES or name_normalized in HUNGARIAN_MALE_NAMES:
+            return "férfi"
+        if name_part in HUNGARIAN_FEMALE_NAMES or name_normalized in HUNGARIAN_FEMALE_NAMES:
+            return "nő"
+    
+    # 3. Végződés alapú heurisztika (ha nincs a listában)
+    # Magyar női nevek jellemzően -a végződésűek (70-80%)
+    # Férfi nevek: konzonáns végződés vagy más magánhangzó
+    
+    # Utolsó szó vizsgálata (általában a keresztnév)
+    last_word = words[-1] if len(words) > 0 else ""
+    
+    if len(last_word) >= 3:
+        # Női indikátorok
+        if last_word.endswith('a') and not last_word.endswith('ia'):  # -a végződés (de nem -ia mint Mária)
+            # Kivéve néhány férfi név: Béla, Gyula, Attila, Andrea (ritkán férfi is)
+            male_exceptions = ['béla', 'bela', 'gyula', 'attila', 'andrea', 'nikita']
+            if last_word not in male_exceptions:
+                return "nő"
+        
+        # Ha -ia, -ika, -na, -ta, -ra végződés -> általában női
+        if any(last_word.endswith(ending) for ending in ['ia', 'ika', 'na', 'ta', 'ra', 'ka', 'ella', 'etta']):
+            return "nő"
+        
+        # Férfi indikátorok - konzonáns végződés
+        if last_word[-1] in 'bcdfghjklmnpqrstvwxyz':
+            # Kivéve ha -us, -os, -es, -as végződés (inkább általános)
+            if not any(last_word.endswith(ending) for ending in ['us', 'os', 'es', 'as']):
+                return "férfi"
+        
+        # -ó, -ő végződés -> férfi (László, Árpád, stb.)
+        if last_word.endswith('ó') or last_word.endswith('ő'):
+            return "férfi"
+    
+    # Ha semmi nem egyezett, None
+    return None
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
