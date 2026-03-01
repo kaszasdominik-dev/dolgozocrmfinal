@@ -211,6 +211,7 @@ class WorkerCreate(BaseModel):
     work_type: Optional[str] = ""  # Munkavégzés típusa: "Ingázó", "Szállásos", ""
     has_car: Optional[str] = ""  # Saját autó: "Van", "Nincs", ""
     initial_status: Optional[str] = None  # Projekt státusz létrehozáskor (ha project_id van)
+    gender: Optional[str] = None  # ÚJ: Nem: "férfi", "nő" (automatikusan detektálva névből, de felülírható)
 
 class WorkerUpdate(BaseModel):
     name: Optional[str] = None
@@ -229,6 +230,7 @@ class WorkerUpdate(BaseModel):
     county: Optional[str] = None
     work_type: Optional[str] = None  # Munkavégzés típusa
     has_car: Optional[str] = None  # Saját autó
+    gender: Optional[str] = None  # ÚJ: Nem
 
 class WorkerResponse(BaseModel):
     id: str
@@ -255,6 +257,7 @@ class WorkerResponse(BaseModel):
     work_type: Optional[str] = ""  # Munkavégzés típusa: Ingázó/Szállásos
     has_car: Optional[str] = ""  # Saját autó: Van/Nincs
     distance_km: Optional[float] = None  # Távolság km-ben (ha szűrés aktív)
+    gender: Optional[str] = None  # ÚJ: Nem: "férfi", "nő"
 
 class ProjectCreate(BaseModel):
     name: str
