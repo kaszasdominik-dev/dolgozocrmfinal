@@ -1367,6 +1367,7 @@ async def get_workers(
     global_status: Optional[str] = None,  # Globális státusz szűrő
     project_id: Optional[str] = None,  # Projekt szűrő
     project_status: Optional[str] = None,  # Projekt státusz szűrő
+    gender: Optional[str] = None,  # ÚJ: Nem szűrő ("férfi", "nő")
     page: int = 1,  # Pagination
     page_size: int = 100,  # Pagination méret
     user: dict = Depends(get_current_user)
