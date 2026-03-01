@@ -5799,7 +5799,7 @@ async def gmail_oauth_callback(code: str, state: str):
     await db.oauth_states.delete_one({"state": state})
     
     # Exchange code for tokens
-    frontend_url = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:3000')
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
     redirect_uri = f"{frontend_url}/api/oauth/gmail/callback"
     
     token_data = await exchange_code_for_tokens(code, redirect_uri)
