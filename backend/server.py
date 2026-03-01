@@ -689,66 +689,58 @@ def normalize_text_for_search(text: str) -> str:
         return ""
     return remove_accents(text.lower())
 
-# ==================== GENDER DETECTION ====================
+# ==================== AI-BASED GENDER DETECTION ====================
 
-# Common Hungarian male and female names
-MALE_FIRST_NAMES = {
-    "janos", "jozsef", "laszlo", "istvan", "ferenc", "zoltan", "gabor", "sandor",
-    "peter", "attila", "tamas", "andras", "gyorgy", "mihaly", "imre", "csaba",
-    "tibor", "bela", "lajos", "endre", "balazs", "david", "adam", "mark",
-    "levente", "bence", "mate", "patrik", "viktor", "gergo", "norbert", "krisztian",
-    "zsolt", "robert", "richard", "daniel", "roland", "kornel", "domotor", "bendeguz"
-}
+from emergentintegrations.llm.chat import LlmChat, UserMessage
 
-FEMALE_FIRST_NAMES = {
-    "maria", "katalin", "ilona", "erzsebet", "anna", "zsuzsanna", "margit", "judit",
-    "eva", "agnes", "gabriella", "andrea", "monika", "szilvia", "erika", "timea",
-    "renata", "petra", "eszter", "reka", "dora", "kitti", "viktoria", "beatrix",
-    "barbara", "krisztina", "nikolett", "fanni", "alexandra", "laura", "kinga",
-    "anita", "emese", "csilla", "bernadett", "melinda", "boglarka", "edina"
-}
+# LLM API kulcs
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
-def detect_gender_from_name(full_name: str) -> Optional[str]:
+async def detect_gender_from_name(full_name: str) -> Optional[str]:
     """
-    Detect gender from Hungarian name
+    AI-based gender detection for Hungarian names using Claude/GPT
     Returns: "férfi", "nő", or None if cannot determine
     
-    Logic:
-    1. Extract first name (before space or after space if "XY-né" pattern)
-    2. Check against Hungarian name lists
-    3. Check for "né" suffix (indicates female: married name)
+    Uses Emergent LLM key (universal key) with Claude Sonnet 4
+    Results are cached in the database for performance
     """
-    if not full_name:
+    if not full_name or not EMERGENT_LLM_KEY:
         return None
     
-    name_lower = remove_accents(full_name.lower())
-    
-    # Check for "né" suffix (e.g., "Kovács János-né" or "Kiss Máriáné")
-    if "ne" in name_lower or "-ne" in name_lower:
+    # Check for "né" suffix first (married name - always female)
+    name_lower = full_name.lower()
+    if "né" in name_lower or "-né" in name_lower:
         return "nő"
     
-    # Split name and get first name
-    # Hungarian names: Last Name First Name (e.g., "Kovács János")
-    # But sometimes First Name Last Name in modern usage
-    parts = name_lower.split()
-    if len(parts) < 2:
-        return None
-    
-    # Try both first and second word as first name
-    possible_first_names = [
-        remove_accents(parts[0].lower()),
-        remove_accents(parts[1].lower()) if len(parts) > 1 else None
-    ]
-    
-    for first_name in possible_first_names:
-        if not first_name:
-            continue
-        if first_name in MALE_FIRST_NAMES:
+    try:
+        # Initialize LLM chat
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"gender-detection-{full_name}",
+            system_message="Te egy magyar név nemének meghatározására specializálódott asszisztens vagy. Válaszolj CSAK egy szóval: 'férfi', 'nő', vagy 'ismeretlen'."
+        ).with_model("anthropic", "claude-sonnet-4-6")
+        
+        # Create user message
+        user_message = UserMessage(
+            text=f"Mi a következő magyar név neme? Név: '{full_name}'. Válaszolj CSAK: férfi / nő / ismeretlen"
+        )
+        
+        # Get response
+        response = await chat.send_message(user_message)
+        
+        # Parse response
+        response_clean = response.strip().lower()
+        
+        if "férfi" in response_clean or "ferfi" in response_clean:
             return "férfi"
-        if first_name in FEMALE_FIRST_NAMES:
+        elif "nő" in response_clean or "no" in response_clean:
             return "nő"
-    
-    return None
+        else:
+            return None
+            
+    except Exception as e:
+        logger.error(f"Gender detection error for '{full_name}': {str(e)}")
+        return None
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
