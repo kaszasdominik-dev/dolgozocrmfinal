@@ -1722,6 +1722,7 @@ async def get_worker(worker_id: str, user: dict = Depends(get_current_user)):
     # Új mezők
     w["work_type"] = w.get("work_type", "")
     w["has_car"] = w.get("has_car", "")
+    w["gender"] = w.get("gender")  # ÚJ: Nem
     w["distance_km"] = None
     
     tag_ids = w.get("tag_ids", [])
