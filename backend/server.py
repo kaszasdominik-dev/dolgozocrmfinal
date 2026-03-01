@@ -3066,6 +3066,8 @@ async def archive_worker_to_kuka(
 ):
     """
     Dolgozó kukába helyezése a projekten belül - indokkal és naplózással
+    ÚJ: Globális státusz visszaállítása "Feldolgozatlan"-ra
+    ÚJ: Automatikus megjegyzés hozzáadása a dolgozóhoz
     """
     project = await db.projects.find_one({"id": project_id}, {"_id": 0})
     if not project:
@@ -3095,6 +3097,28 @@ async def archive_worker_to_kuka(
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }}
         )
+    
+    # ÚJ: Globális státusz visszaállítása "Feldolgozatlan"-ra
+    await db.workers.update_one(
+        {"id": worker_id},
+        {"$set": {"global_status": "Feldolgozatlan"}}
+    )
+    
+    # ÚJ: Automatikus megjegyzés hozzáadása a dolgozó notes mezőjéhez
+    company_name = project.get("client_name") or project["name"]
+    auto_note = f"{company_name} ({project['name']}) - Kuka: {reason}"
+    
+    # Hozzáfűzzük a meglévő megjegyzéshez
+    existing_notes = worker.get("notes", "")
+    if existing_notes:
+        new_notes = f"{existing_notes}\n\n{auto_note}"
+    else:
+        new_notes = auto_note
+    
+    await db.workers.update_one(
+        {"id": worker_id},
+        {"$set": {"notes": new_notes}}
+    )
     
     # Naplóbejegyzés a dolgozóhoz
     project_display = f"{project['name']}"
