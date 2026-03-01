@@ -709,7 +709,7 @@ HUNGARIAN_MALE_NAMES = {
     "ede", "edgár", "edmund", "edwin", "egon", "elektro", "elemér", "emil", "erik", "ernő",
     "ervin", "eugene", "félix", "feri", "ferenc", "flórián", "frigyes", "fülöp",
     # G-betűs férfi nevek
-    "gábor", "gáspár", "gedeon", "gellért", "géza", "gusztáv", "gyorgy", "györgy", "gyula", "gerg",
+    "gábor", "gabor", "gáspár", "gaspar", "gedeon", "gellért", "géza", "geza", "gusztáv", "gyorgy", "györgy", "gyula", "gerg",
     # H-I betűs férfi nevek
     "harold", "henrik", "herbert", "hunor", "ignác", "ilja", "imre", "istván", "iván", "iver", "izidor",
     # J-K betűs férfi nevek
