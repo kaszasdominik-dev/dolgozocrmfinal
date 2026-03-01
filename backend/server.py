@@ -5776,6 +5776,15 @@ async def startup_event():
         replace_existing=True
     )
     logger.info("Email queue processor scheduled")
+    
+    # Schedule weekly summary email (every Monday at 8:00 AM)
+    scheduler.add_job(
+        weekly_summary_email,
+        CronTrigger(day_of_week='mon', hour=8, minute=0),
+        id="weekly_summary_email",
+        replace_existing=True
+    )
+    logger.info("📊 Weekly summary email scheduled: Every Monday at 08:00")
 
 
 @app.on_event("shutdown")
