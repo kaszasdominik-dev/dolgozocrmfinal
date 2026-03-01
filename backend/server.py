@@ -755,7 +755,7 @@ HUNGARIAN_FEMALE_NAMES = {
     "dorottya", "edina", "edit", "egina", "elaine", "elektra", "elena", "eleonóra", "eliana", "elisa",
     "elisabeth", "elizabet", "eliza", "ella", "ellen", "elma", "elona", "elsa", "elvira", "emese",
     "emília", "emma", "emmanuella", "enikő", "erika", "erna", "ernesztina", "eszter", "eta", "eugene",
-    "eugenia", "eulália", "eva", "evelin", "evelina", "éva",
+    "eugenia", "eulália", "eva", "éva", "evelin", "evelina",
     # F-G betűs női nevek
     "fanni", "fanny", "fatima", "fatime", "felicia", "felícia", "fiona", "flóra", "franciska",
     "frida", "fruzsina", "gabi", "gabriella", "genovéva", "georgia", "gerda", "gitta", "gizella",
