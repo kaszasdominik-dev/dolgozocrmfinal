@@ -69,6 +69,12 @@ export default function WorkerFormPage() {
   const [mapSearchResults, setMapSearchResults] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [geocoding, setGeocoding] = useState(false);
+  
+  // CV Import state
+  const [cvImportDialog, setCvImportDialog] = useState(false);
+  const [cvFile, setCvFile] = useState(null);
+  const [cvParsing, setCvParsing] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchInitialData();
