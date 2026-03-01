@@ -3981,6 +3981,204 @@ async def preview_excel_import(
         logging.error(f"Excel preview error: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Hiba a fájl olvasásakor: {str(e)}")
 
+# ==================== CV/EXCEL IMPORT AI-VAL ====================
+
+@api_router.post("/workers/import/cv-parse")
+async def parse_cv_with_ai(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user)
+):
+    """
+    CV/Excel fájl AI-alapú elemzése és adatok kinyerése
+    Támogatott formátumok: PDF, DOCX, TXT, XLSX, XLS
+    
+    AI kivonja:
+    - Név
+    - Telefonszám
+    - Email
+    - Lakcím
+    - Tapasztalat (évek)
+    - Pozíció/szakma
+    - Készségek
+    """
+    filename = file.filename.lower()
+    
+    # Támogatott fájl típusok
+    supported = filename.endswith(('.pdf', '.docx', '.txt', '.xlsx', '.xls'))
+    if not supported:
+        raise HTTPException(
+            status_code=400, 
+            detail="Csak PDF, DOCX, TXT, XLSX, XLS fájlok támogatottak"
+        )
+    
+    try:
+        contents = await file.read()
+        
+        # Szöveg kinyerése fájl típus szerint
+        if filename.endswith('.pdf'):
+            text = extract_text_from_pdf(contents)
+        elif filename.endswith('.docx'):
+            text = extract_text_from_docx(contents)
+        elif filename.endswith('.txt'):
+            text = contents.decode('utf-8', errors='ignore')
+        elif filename.endswith(('.xlsx', '.xls')):
+            text = extract_text_from_excel(contents)
+        else:
+            raise HTTPException(status_code=400, detail="Nem támogatott fájl típus")
+        
+        if not text or len(text.strip()) < 20:
+            raise HTTPException(status_code=400, detail="Nem sikerült szöveget kinyerni a fájlból")
+        
+        # AI-alapú adatkinyerés Groq Llama-val
+        extracted_data = await extract_worker_data_with_ai(text)
+        
+        return {
+            "success": True,
+            "extracted_data": extracted_data,
+            "original_text_preview": text[:500]  # Első 500 karakter preview
+        }
+        
+    except Exception as e:
+        logger.error(f"CV parse error: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Hiba a CV feldolgozása során: {str(e)}")
+
+
+def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    """PDF szöveg kinyerése"""
+    from PyPDF2 import PdfReader
+    import io
+    
+    pdf_file = io.BytesIO(pdf_bytes)
+    reader = PdfReader(pdf_file)
+    
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text() or ""
+    
+    return text.strip()
+
+
+def extract_text_from_docx(docx_bytes: bytes) -> str:
+    """DOCX szöveg kinyerése"""
+    # Egyszerű XML parsing DOCX-hez
+    import zipfile
+    import io
+    import xml.etree.ElementTree as ET
+    
+    docx_file = io.BytesIO(docx_bytes)
+    zf = zipfile.ZipFile(docx_file)
+    
+    # document.xml tartalmazza a szöveget
+    xml_content = zf.read('word/document.xml')
+    tree = ET.XML(xml_content)
+    
+    # Namespace
+    namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+    
+    # Szöveg kinyerése
+    paragraphs = tree.findall('.//w:t', namespaces)
+    text = ' '.join([node.text for node in paragraphs if node.text])
+    
+    return text.strip()
+
+
+def extract_text_from_excel(excel_bytes: bytes) -> str:
+    """Excel szöveg kinyerése (minden cella összefűzése)"""
+    import io
+    from openpyxl import load_workbook
+    
+    wb = load_workbook(filename=io.BytesIO(excel_bytes), read_only=True, data_only=True)
+    ws = wb.active
+    
+    text_parts = []
+    for row in ws.iter_rows(max_row=100):  # Max 100 sor
+        for cell in row:
+            if cell.value:
+                text_parts.append(str(cell.value))
+    
+    wb.close()
+    return ' '.join(text_parts)
+
+
+async def extract_worker_data_with_ai(text: str) -> dict:
+    """
+    AI-alapú adatkinyerés Groq Llama 3.3 70B-vel
+    Kivonja: név, telefon, email, cím, tapasztalat, pozíció, készségek
+    """
+    from groq import Groq
+    
+    if not GROQ_API_KEY:
+        raise HTTPException(status_code=500, detail="GROQ_API_KEY nincs beállítva")
+    
+    try:
+        client = Groq(api_key=GROQ_API_KEY)
+        
+        # AI prompt
+        prompt = f"""
+Elemezd az alábbi CV/önéletrajz szöveget és vond ki a következő adatokat JSON formátumban.
+Ha valamit nem találsz, használj null értéket.
+
+Szöveg:
+{text[:2000]}  # Max 2000 karakter az AI-nak
+
+Válasz JSON formátuma:
+{{
+  "name": "Teljes név",
+  "phone": "Telefonszám (magyar formátum: +36 vagy 06)",
+  "email": "email@example.com",
+  "address": "Teljes lakcím (város, utca)",
+  "position": "Legutóbbi pozíció/szakma",
+  "experience": "Tapasztalat években (szám) vagy leírás",
+  "skills": ["készség1", "készség2", "készség3"],
+  "notes": "További releváns infók"
+}}
+
+FONTOS: Csak JSON-t adj vissza, semmi mást!
+"""
+
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": "Te egy CV/önéletrajz elemző szakértő vagy. Csak JSON formátumban válaszolj."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500,
+            temperature=0.1
+        )
+        
+        # Válasz parsing
+        result_text = response.choices[0].message.content.strip()
+        
+        # JSON kinyerése (néha markdown kód blokkban van)
+        if "```json" in result_text:
+            result_text = result_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in result_text:
+            result_text = result_text.split("```")[1].split("```")[0].strip()
+        
+        # JSON parse
+        extracted = json.loads(result_text)
+        
+        # AI Gender Detection a névre
+        if extracted.get("name"):
+            extracted["gender"] = detect_gender_from_name(extracted["name"])
+        
+        return extracted
+        
+    except Exception as e:
+        logger.error(f"AI extraction error: {str(e)}")
+        # Fallback: alapértelmezett üres adatok
+        return {
+            "name": None,
+            "phone": None,
+            "email": None,
+            "address": None,
+            "position": None,
+            "experience": None,
+            "skills": [],
+            "notes": f"AI extraction hiba: {str(e)}"
+        }
+
+
 @api_router.post("/workers/import")
 async def import_workers_from_excel(
     file: UploadFile = File(...),
