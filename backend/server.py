@@ -6013,6 +6013,10 @@ async def startup_event():
         # STATUSES
         await db.statuses.create_index([("name", 1)])  # Státusz név keresés
         
+        # USER_BLACKLIST (user-specific blacklist)
+        await db.user_blacklist.create_index([("user_id", 1), ("worker_id", 1)], unique=True)
+        await db.user_blacklist.create_index([("worker_id", 1)])
+        
         logger.info("✅ MongoDB indexek sikeresen létrehozva!")
     except Exception as e:
         logger.error(f"⚠️ Index létrehozási hiba (nem kritikus): {e}")
