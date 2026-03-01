@@ -5759,7 +5759,7 @@ async def get_gmail_auth_url(
     current_user: dict = Depends(get_current_user)
 ):
     """Get Gmail OAuth authorization URL"""
-    frontend_url = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:3000')
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
     redirect_uri = f"{frontend_url}/api/oauth/gmail/callback"
     
     # Generate state token
