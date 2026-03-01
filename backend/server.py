@@ -1400,6 +1400,8 @@ async def get_workers(
         query["has_car"] = has_car
     if global_status:
         query["global_status"] = global_status
+    if gender:  # ÚJ: Nem szűrő
+        query["gender"] = gender
     
     # Dátum szűrés (felvétel dátuma)
     if date_from or date_to:
