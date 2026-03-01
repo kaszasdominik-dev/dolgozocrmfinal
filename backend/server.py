@@ -234,7 +234,11 @@ class WorkerUpdate(BaseModel):
     county: Optional[str] = None
     work_type: Optional[str] = None  # Munkavégzés típusa
     has_car: Optional[str] = None  # Saját autó
-    gender: Optional[str] = None  # ÚJ: Nem
+    gender: Optional[str] = None  # Nem
+    # GDPR mezők
+    consent_given: Optional[bool] = None
+    consent_date: Optional[str] = None
+    processing_basis: Optional[str] = None
 
 class WorkerResponse(BaseModel):
     id: str
