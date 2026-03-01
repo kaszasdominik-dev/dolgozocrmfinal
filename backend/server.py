@@ -818,8 +818,9 @@ def detect_gender_from_name(full_name: str) -> Optional[str]:
     
     name_lower = full_name.lower().strip()
     
-    # 1. "né" utótag jelzi a női házas nevet
-    if "né" in name_lower or " né " in name_lower:
+    # 1. "né" utótag jelzi a női házas nevet (de NEM ha a név közepén van!)
+    # Példa: "Kiss Jánosné" -> női, de "Németh Gábor" -> nem
+    if " né " in name_lower or name_lower.endswith("né"):
         return "nő"
     
     # 2. Keresztnév kinyerése
