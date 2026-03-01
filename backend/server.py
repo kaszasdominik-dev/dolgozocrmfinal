@@ -6834,7 +6834,9 @@ async def weekly_summary_email():
         )
         
         logger.info(f"✅ Heti összefoglaló email elküldve: {admin['email']}, {total_workers} dolgozó")
-
+        
+    except Exception as e:
+        logger.error(f"❌ Heti összefoglaló email hiba: {e}", exc_info=True)
 
 
 @api_router.post("/admin/send-weekly-summary-now")
@@ -6845,10 +6847,6 @@ async def send_weekly_summary_now(user: dict = Depends(require_admin)):
     """
     await weekly_summary_email()
     return {"success": True, "message": "Heti összefoglaló email elküldve"}
-
-        
-    except Exception as e:
-        logger.error(f"❌ Heti összefoglaló email hiba: {e}", exc_info=True)
 
 
 # Schedule heti összefoglaló
