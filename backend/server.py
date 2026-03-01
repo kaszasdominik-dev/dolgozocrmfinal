@@ -1761,6 +1761,9 @@ async def create_worker(data: WorkerCreate, user: dict = Depends(get_current_use
     if len(data.name) < 2:
         raise HTTPException(status_code=400, detail="A név minimum 2 karakter legyen")
     
+    # ÚJ: Automatikus nem detektálás névből (ha nincs megadva)
+    detected_gender = data.gender or detect_gender_from_name(data.name)
+    
     # Geocode the address if provided
     geo_data = {"latitude": None, "longitude": None, "county": ""}
     if data.address and len(data.address.strip()) > 3:
@@ -1786,7 +1789,8 @@ async def create_worker(data: WorkerCreate, user: dict = Depends(get_current_use
         "longitude": data.longitude or geo_data.get("longitude"),
         "county": data.county or geo_data.get("county", ""),
         "work_type": data.work_type or "",  # Új: Munkavégzés típusa
-        "has_car": data.has_car or ""  # Új: Saját autó
+        "has_car": data.has_car or "",  # Új: Saját autó
+        "gender": detected_gender  # ÚJ: Automatikusan detektált nem
     }
     await db.workers.insert_one(worker_doc)
     
