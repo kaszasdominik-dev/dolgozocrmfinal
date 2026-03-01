@@ -4208,10 +4208,15 @@ async def process_excel_import_background(
         )
         
         logger.error(f"Excel import failed: {str(e)}")
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Hiba az importálás során: {str(e)}")
+
+
+@api_router.get("/import-jobs/{job_id}")
+async def get_import_job_status(job_id: str, user: dict = Depends(get_current_user)):
+    """Get status of background import job"""
+    job = await db.import_jobs.find_one({"id": job_id, "user_id": user["id"]}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Import job not found")
+    return job
 
 # ==================== FTP SYNC / BACKUP ====================
 
