@@ -3292,10 +3292,15 @@ async def add_worker_to_blacklist(
     user: dict = Depends(get_current_user)
 ):
     """
-    Dolgozó hozzáadása a Tiltólistához (globálisan)
+    Dolgozó hozzáadása a Tiltólistához (USER-SPECIFIKUS!)
+    
     Különbség Kuka vs Tiltólista:
     - Kuka: Nem felel meg valamiért (projekten belül)
-    - Tiltólista: Nem akarjuk foglalkoztatni (globálisan, nem éri meg)
+    - Tiltólista: Nem akarom foglalkoztatni (csak TE nem látod, más igen!)
+    
+    FONTOS: 
+    - Toborzó: Csak saját viewjában lesz tiltólistán
+    - Admin: Látja MINDEN dolgozót, tiltólista státusz nélkül is
     """
     # Jogosultság ellenőrzés
     query = {"id": worker_id}
@@ -3310,14 +3315,37 @@ async def add_worker_to_blacklist(
     if not reason:
         raise HTTPException(status_code=400, detail="Indok megadása kötelező")
     
-    # Globális státusz beállítása "Tiltólista"-ra
-    await db.workers.update_one(
-        {"id": worker_id},
-        {"$set": {"global_status": "Tiltólista"}}
-    )
+    # USER-SPECIFIKUS blacklist tárolása külön collection-ben
+    blacklist_entry = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],  # KI tiltotta le
+        "worker_id": worker_id,
+        "reason": reason,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.get("name") or user["email"]
+    }
     
-    # Megjegyzés hozzáadása
-    auto_note = f"🚫 TILTÓLISTA: {reason} (Hozzáadva: {datetime.now().strftime('%Y.%m.%d')}, {user.get('name') or user['email']})"
+    # Ellenőrizzük van-e már blacklist bejegyzés
+    existing = await db.user_blacklist.find_one({
+        "user_id": user["id"],
+        "worker_id": worker_id
+    })
+    
+    if existing:
+        # Frissítjük a meglévőt
+        await db.user_blacklist.update_one(
+            {"user_id": user["id"], "worker_id": worker_id},
+            {"$set": {
+                "reason": reason,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    else:
+        # Új bejegyzés
+        await db.user_blacklist.insert_one(blacklist_entry)
+    
+    # Megjegyzés hozzáadása (csak info, nem globális státusz!)
+    auto_note = f"🚫 TILTÓLISTA ({user.get('name') or user['email']}): {reason} (Hozzáadva: {datetime.now().strftime('%Y.%m.%d')})"
     
     existing_notes = worker.get("notes", "")
     if existing_notes:
@@ -3339,15 +3367,16 @@ async def add_worker_to_blacklist(
         details={
             "reason": reason,
             "worker_name": worker["name"],
-            "added_by": user.get("name") or user["email"]
+            "added_by": user.get("name") or user["email"],
+            "user_specific": True
         }
     )
     
     return {
         "success": True,
-        "message": "Dolgozó hozzáadva a Tiltólistához",
+        "message": f"Dolgozó hozzáadva a te Tiltólistádhoz (csak te nem látod többé)",
         "worker_id": worker_id,
-        "global_status": "Tiltólista"
+        "blacklisted_by": user.get("name") or user["email"]
     }
 
 
@@ -3357,37 +3386,33 @@ async def remove_worker_from_blacklist(
     user: dict = Depends(get_current_user)
 ):
     """
-    Dolgozó eltávolítása a Tiltólistáról
-    Globális státusz visszaállítása "Feldolgozatlan"-ra
+    Dolgozó eltávolítása a Tiltólistáról (USER-SPECIFIKUS)
     """
-    # Jogosultság ellenőrzés
-    query = {"id": worker_id}
-    if user["role"] != "admin":
-        query["owner_id"] = user["id"]
+    # Töröljük a user-specifikus blacklist bejegyzést
+    result = await db.user_blacklist.delete_one({
+        "user_id": user["id"],
+        "worker_id": worker_id
+    })
     
-    worker = await db.workers.find_one(query, {"_id": 0})
-    if not worker:
-        raise HTTPException(status_code=404, detail="Dolgozó nem található vagy nincs jogosultságod")
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Dolgozó nincs a te Tiltólistádon")
     
-    # Globális státusz visszaállítása
-    await db.workers.update_one(
-        {"id": worker_id},
-        {"$set": {"global_status": "Feldolgozatlan"}}
-    )
+    worker = await db.workers.find_one({"id": worker_id}, {"_id": 0})
     
     # Megjegyzés hozzáadása
-    auto_note = f"✅ Tiltólistáról eltávolítva ({datetime.now().strftime('%Y.%m.%d')}, {user.get('name') or user['email']})"
+    auto_note = f"✅ Tiltólistáról eltávolítva ({user.get('name') or user['email']}) - {datetime.now().strftime('%Y.%m.%d')}"
     
-    existing_notes = worker.get("notes", "")
-    if existing_notes:
-        new_notes = f"{existing_notes}\n\n{auto_note}"
-    else:
-        new_notes = auto_note
-    
-    await db.workers.update_one(
-        {"id": worker_id},
-        {"$set": {"notes": new_notes}}
-    )
+    if worker:
+        existing_notes = worker.get("notes", "")
+        if existing_notes:
+            new_notes = f"{existing_notes}\n\n{auto_note}"
+        else:
+            new_notes = auto_note
+        
+        await db.workers.update_one(
+            {"id": worker_id},
+            {"$set": {"notes": new_notes}}
+        )
     
     # Audit log
     await audit_logger.log(
@@ -3396,7 +3421,7 @@ async def remove_worker_from_blacklist(
         resource_type="worker",
         resource_id=worker_id,
         details={
-            "worker_name": worker["name"],
+            "worker_name": worker.get("name") if worker else "Unknown",
             "removed_by": user.get("name") or user["email"]
         }
     )
@@ -3404,8 +3429,39 @@ async def remove_worker_from_blacklist(
     return {
         "success": True,
         "message": "Dolgozó eltávolítva a Tiltólistáról",
-        "worker_id": worker_id,
-        "global_status": "Feldolgozatlan"
+        "worker_id": worker_id
+    }
+
+
+@api_router.get("/workers/my-blacklist")
+async def get_my_blacklist(user: dict = Depends(get_current_user)):
+    """
+    Saját Tiltólista lekérése
+    """
+    blacklist_entries = await db.user_blacklist.find(
+        {"user_id": user["id"]},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Worker adatok hozzáadása
+    result = []
+    for entry in blacklist_entries:
+        worker = await db.workers.find_one({"id": entry["worker_id"]}, {"_id": 0})
+        if worker:
+            result.append({
+                "blacklist_id": entry["id"],
+                "worker_id": worker["id"],
+                "worker_name": worker["name"],
+                "worker_phone": worker["phone"],
+                "worker_email": worker.get("email", ""),
+                "reason": entry["reason"],
+                "blacklisted_at": entry["created_at"],
+                "blacklisted_by": entry["created_by"]
+            })
+    
+    return {
+        "blacklist": result,
+        "count": len(result)
     }
 
 
