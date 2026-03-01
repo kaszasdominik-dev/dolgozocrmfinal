@@ -693,19 +693,19 @@ def normalize_text_for_search(text: str) -> str:
 
 # Common Hungarian male and female names
 MALE_FIRST_NAMES = {
-    "jános", "józsef", "lászló", "istván", "ferenc", "zoltán", "gábor", "sándor",
-    "péter", "attila", "tamás", "andrás", "györgy", "mihály", "imre", "csaba",
-    "tibor", "béla", "lajos", "endre", "balázs", "dávid", "ádám", "márk",
-    "levente", "bence", "máté", "patrik", "viktor", "gergő", "norbert", "krisztián",
-    "zsolt", "róbert", "richárd", "dániel", "roland", "kornél", "dömötör", "bendegúz"
+    "janos", "jozsef", "laszlo", "istvan", "ferenc", "zoltan", "gabor", "sandor",
+    "peter", "attila", "tamas", "andras", "gyorgy", "mihaly", "imre", "csaba",
+    "tibor", "bela", "lajos", "endre", "balazs", "david", "adam", "mark",
+    "levente", "bence", "mate", "patrik", "viktor", "gergo", "norbert", "krisztian",
+    "zsolt", "robert", "richard", "daniel", "roland", "kornel", "domotor", "bendeguz"
 }
 
 FEMALE_FIRST_NAMES = {
-    "mária", "katalin", "ilona", "erzsébet", "anna", "zsuzsanna", "margit", "judit",
-    "éva", "ágnes", "gabriella", "andrea", "mónika", "szilvia", "erika", "tímea",
-    "renáta", "petra", "eszter", "réka", "dóra", "kitti", "viktória", "beatrix",
+    "maria", "katalin", "ilona", "erzsebet", "anna", "zsuzsanna", "margit", "judit",
+    "eva", "agnes", "gabriella", "andrea", "monika", "szilvia", "erika", "timea",
+    "renata", "petra", "eszter", "reka", "dora", "kitti", "viktoria", "beatrix",
     "barbara", "krisztina", "nikolett", "fanni", "alexandra", "laura", "kinga",
-    "anita", "emese", "csilla", "bernadett", "melinda", "boglárka", "edina"
+    "anita", "emese", "csilla", "bernadett", "melinda", "boglarka", "edina"
 }
 
 def detect_gender_from_name(full_name: str) -> Optional[str]:
