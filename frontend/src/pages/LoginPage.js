@@ -108,6 +108,21 @@ export default function LoginPage() {
               </div>
             </div>
             
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="rememberMe" 
+                checked={rememberMe}
+                onCheckedChange={setRememberMe}
+                data-testid="login-remember-me-checkbox"
+              />
+              <Label 
+                htmlFor="rememberMe" 
+                className="text-sm font-normal text-muted-foreground cursor-pointer"
+              >
+                Emlékezz rám
+              </Label>
+            </div>
+            
             <Button 
               type="submit" 
               className="w-full h-11 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-lg shadow-lg shadow-primary/25 transition-all duration-200"
