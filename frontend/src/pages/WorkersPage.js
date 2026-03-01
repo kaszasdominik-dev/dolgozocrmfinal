@@ -374,7 +374,7 @@ export default function WorkersPage() {
 
   const hasFilters = search || typeFilter || tagFilter || ownerFilter || 
                      countyFilter || positionFilter || workTypeFilter || hasCarFilter || 
-                     globalStatusFilter || propertyFilter || dateFrom || dateTo || locationEnabled ||
+                     globalStatusFilter || propertyFilter || genderFilter || dateFrom || dateTo || locationEnabled ||
                      filterProjectId || projectStatusFilter;
 
   const hasAdvancedFilters = countyFilter || positionFilter || workTypeFilter || hasCarFilter || 
