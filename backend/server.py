@@ -5672,6 +5672,64 @@ async def startup_event():
             )
             logger.info("✅ Feldolgozás alatt → Feldolgozatlan átnevezve")
     
+    # ==================== DATABASE INDEXEK LÉTREHOZÁSA ====================
+    logger.info("🔧 MongoDB indexek létrehozása/ellenőrzése...")
+    
+    try:
+        # WORKERS collection indexek (legtöbb lekérdezés itt van)
+        await db.workers.create_index([("owner_id", 1)])  # Toborzó saját dolgozói
+        await db.workers.create_index([("email", 1)], sparse=True)  # Email keresés
+        await db.workers.create_index([("phone", 1)])  # Telefonszám keresés
+        await db.workers.create_index([("global_status", 1)])  # Státusz szűrés
+        await db.workers.create_index([("worker_type_id", 1)])  # Típus szűrés
+        await db.workers.create_index([("county", 1)])  # Megye szűrés
+        await db.workers.create_index([("created_at", -1)])  # Legújabbak elöl
+        await db.workers.create_index([("owner_id", 1), ("global_status", 1)])  # Kombinált szűrés
+        await db.workers.create_index([("position", "text"), ("name", "text")])  # Full-text search
+        
+        # PROJECT_WORKERS collection (projekt-dolgozó kapcsolatok)
+        await db.project_workers.create_index([("project_id", 1), ("worker_id", 1)], unique=True)
+        await db.project_workers.create_index([("worker_id", 1)])  # Dolgozó projektjei
+        await db.project_workers.create_index([("project_id", 1), ("status_id", 1)])  # Projekt státuszok
+        await db.project_workers.create_index([("project_id", 1), ("added_at", -1)])  # Legutóbb hozzáadottak
+        
+        # PROJECTS collection
+        await db.projects.create_index([("owner_id", 1)])  # Toborzó projektjei
+        await db.projects.create_index([("is_closed", 1)])  # Aktív/lezárt projektek
+        await db.projects.create_index([("date", 1)])  # Dátum szerinti rendezés
+        await db.projects.create_index([("recruiter_ids", 1)])  # Multi-toborzós projektek
+        await db.projects.create_index([("created_at", -1)])  # Legújabbak
+        
+        # USERS collection
+        await db.users.create_index([("email", 1)], unique=True)  # Email login
+        await db.users.create_index([("role", 1)])  # Admin/User szűrés
+        
+        # SECURITY & AUDIT collections
+        await db.login_attempts.create_index([("email", 1), ("timestamp", -1)])  # Rate limiting
+        await db.login_attempts.create_index([("timestamp", 1)], expireAfterSeconds=86400)  # 24h TTL
+        await db.audit_logs.create_index([("user_id", 1), ("timestamp", -1)])  # User audit log
+        await db.audit_logs.create_index([("resource_type", 1), ("timestamp", -1)])  # Resource audit
+        await db.audit_logs.create_index([("timestamp", -1)])  # Legutóbbi események
+        
+        # EMAIL collections
+        await db.email_queue.create_index([("status", 1), ("scheduled_at", 1)])  # Email küldési sor
+        await db.email_logs.create_index([("user_id", 1), ("sent_at", -1)])  # User email történet
+        await db.email_templates.create_index([("user_id", 1)])  # User sablonok
+        await db.unsubscribe_tokens.create_index([("token", 1)], unique=True)  # Leiratkozás token
+        await db.unsubscribe_tokens.create_index([("worker_id", 1)])  # Dolgozó leiratkozások
+        await db.gmail_tokens.create_index([("user_id", 1)], unique=True)  # Gmail OAuth token
+        
+        # TAGS & TYPES
+        await db.tags.create_index([("owner_id", 1)])  # User tagek
+        await db.worker_types.create_index([("owner_id", 1)])  # User típusok
+        
+        # STATUSES
+        await db.statuses.create_index([("name", 1)])  # Státusz név keresés
+        
+        logger.info("✅ MongoDB indexek sikeresen létrehozva!")
+    except Exception as e:
+        logger.error(f"⚠️ Index létrehozási hiba (nem kritikus): {e}")
+    
     # Fő admin felhasználó létrehozása/frissítése
     main_admin = await db.users.find_one({"email": "kaszasdominik@gmail.com"})
     if not main_admin:
