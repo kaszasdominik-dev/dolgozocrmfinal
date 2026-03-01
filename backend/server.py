@@ -7057,20 +7057,16 @@ async def delete_old_workers(
 # Automatikus emlékeztető adminnak 2+ éves dolgozókról
 async def check_old_workers_notification():
     """
-    Automatikus emlékeztető email adminnak havi egyszer
+    Automatikus értesítés adminoknak havi egyszer (rendszerben, NEM email!)
     Ha van 2+ éves dolgozó az adatbázisban
     """
     try:
         logger.info("🔔 2+ éves dolgozók ellenőrzése...")
         
-        # Admin user keresése
-        admin = await db.users.find_one({"email": "kaszasdominik@gmail.com"}, {"_id": 0})
-        if not admin:
-            return
-        
-        # Admin Gmail token ellenőrzése
-        gmail_token = await db.gmail_tokens.find_one({"user_id": admin["id"]})
-        if not gmail_token:
+        # Minden admin user keresése
+        admins = await db.users.find({"role": "admin"}, {"_id": 0}).to_list(100)
+        if not admins:
+            logger.info("⚠️ Nincs admin user")
             return
         
         # 2 éve
@@ -7086,109 +7082,20 @@ async def check_old_workers_notification():
             logger.info("✅ Nincs 2+ éves dolgozó")
             return
         
-        # Top 20 legrégebbi dolgozó
-        old_workers = await db.workers.find(
-            {"created_at": {"$lt": two_years_ago_iso}},
-            {"_id": 0, "id": 1, "name": 1, "phone": 1, "email": 1, "created_at": 1, "global_status": 1}
-        ).sort("created_at", 1).limit(20).to_list(20)
+        # Értesítés küldése MINDEN adminnak a rendszerben
+        for admin in admins:
+            await create_notification(
+                user_id=admin["id"],
+                notification_type="gdpr_warning",
+                title="⚠️ GDPR Figyelmeztetés",
+                message=f"{old_worker_count} dolgozó van az adatbázisban, akik 2+ éve lettek felvéve. Nézd át és töröld a felesleges adatokat!",
+                link="/admin/old-workers"
+            )
         
-        # Email HTML generálása
-        html_body = f"""
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }}
-                .header h1 {{ margin: 0; font-size: 28px; }}
-                .content {{ background: #fef2f2; padding: 30px; border-radius: 0 0 10px 10px; }}
-                .warning {{ background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ef4444; }}
-                .warning h2 {{ margin-top: 0; color: #ef4444; }}
-                table {{ width: 100%; border-collapse: collapse; margin-top: 15px; background: white; border-radius: 8px; overflow: hidden; }}
-                th {{ background: #ef4444; color: white; padding: 12px; text-align: left; font-size: 14px; }}
-                td {{ padding: 12px; border-bottom: 1px solid #fecaca; font-size: 13px; }}
-                tr:last-child td {{ border-bottom: none; }}
-                .btn {{ display: inline-block; background: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 20px; }}
-                .footer {{ text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>⚠️ GDPR Figyelmeztetés</h1>
-                    <p style="margin: 10px 0 0 0; opacity: 0.9;">2+ éves dolgozók az adatbázisban</p>
-                </div>
-                <div class="content">
-                    <div class="warning">
-                        <h2>Adatmegőrzési figyelmeztetés</h2>
-                        <p><strong>{old_worker_count} dolgozó</strong> van az adatbázisban, akik <strong>2 évnél régebben</strong> lettek felvéve.</p>
-                        <p>GDPR szerint ezeket az adatokat törölni kell, hacsak nincs jogos indok a megtartásukra.</p>
-                    </div>
-                    
-                    <h3 style="color: #374151; margin-bottom: 15px;">📋 Legrégebbi 20 dolgozó</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Név</th>
-                                <th>Telefon</th>
-                                <th>Felvéve</th>
-                                <th>Státusz</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-        """
-        
-        for w in old_workers:
-            created = datetime.fromisoformat(w["created_at"].replace('Z', '+00:00'))
-            years_ago = round((datetime.now(timezone.utc) - created).days / 365, 1)
-            html_body += f"""
-                            <tr>
-                                <td><strong>{w["name"]}</strong></td>
-                                <td>{w["phone"]}</td>
-                                <td>{created.strftime('%Y.%m.%d')}<br><small style="color: #ef4444;">({years_ago} éve)</small></td>
-                                <td>{w.get("global_status", "N/A")}</td>
-                            </tr>
-            """
-        
-        html_body += f"""
-                        </tbody>
-                    </table>
-                    
-                    <div style="background: white; padding: 20px; border-radius: 8px; margin-top: 20px;">
-                        <h3 style="color: #374151; margin-top: 0;">Mit kell tenned?</h3>
-                        <ol>
-                            <li>Jelentkezz be a CRM-be admin fiókkal</li>
-                            <li>Menj az Admin menübe</li>
-                            <li>Nézd át a 2+ éves dolgozók listáját</li>
-                            <li>Döntsd el melyeket tartod meg, melyeket törölsz</li>
-                            <li>Töröld a felesleges adatokat</li>
-                        </ol>
-                    </div>
-                    
-                    <div class="footer">
-                        <p>Dolgozó CRM - Automatikus GDPR Emlékeztető</p>
-                        <p><small>Ez az email automatikusan lett elküldve minden hónap 1-jén</small></p>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        
-        # Email küldése
-        from bulk_email import send_email_via_gmail
-        
-        await send_email_via_gmail(
-            gmail_token=gmail_token,
-            to_email=admin["email"],
-            subject=f"⚠️ GDPR Figyelmeztetés - {old_worker_count} dolgozó 2+ éves",
-            body=html_body
-        )
-        
-        logger.info(f"✅ GDPR emlékeztető email elküldve: {old_worker_count} dolgozó")
+        logger.info(f"✅ GDPR értesítés elküldve {len(admins)} adminnak: {old_worker_count} dolgozó")
         
     except Exception as e:
-        logger.error(f"❌ GDPR emlékeztető hiba: {e}", exc_info=True)
+        logger.error(f"❌ GDPR értesítés hiba: {e}", exc_info=True)
 
     # Jogosultság ellenőrzés
     query = {"id": worker_id}
