@@ -48,9 +48,22 @@ export default function WorkerImportPage() {
   
   // Import result
   const [importResult, setImportResult] = useState(null);
+  
+  // Háttér-feldolgozás tracking
+  const [jobId, setJobId] = useState(null);
+  const [jobStatus, setJobStatus] = useState(null);
+  const [progressPercent, setProgressPercent] = useState(0);
+  const pollingIntervalRef = useRef(null);
 
   useEffect(() => {
     fetchWorkerTypes();
+    
+    // Cleanup polling on unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
   }, []);
 
   const fetchWorkerTypes = async () => {
