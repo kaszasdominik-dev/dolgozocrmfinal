@@ -1848,6 +1848,12 @@ async def update_worker(worker_id: str, data: WorkerUpdate, user: dict = Depends
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     
+    # ÚJ: Ha a név változik és a nem nincs explicit megadva, detektáljuk újra
+    if "name" in update_data and "gender" not in update_data:
+        detected_gender = detect_gender_from_name(update_data["name"])
+        if detected_gender:
+            update_data["gender"] = detected_gender
+    
     # If address changed, re-geocode
     if "address" in update_data and update_data["address"] != worker.get("address"):
         geo_data = await geocode_address(update_data["address"])
