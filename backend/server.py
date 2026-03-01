@@ -3283,6 +3283,210 @@ async def archive_worker_to_kuka(
     
     return {"message": "Dolgozó kukába helyezve", "reason": reason}
 
+
+
+@api_router.post("/workers/{worker_id}/blacklist")
+async def add_worker_to_blacklist(
+    worker_id: str,
+    data: dict,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Dolgozó hozzáadása a Tiltólistához (globálisan)
+    Különbség Kuka vs Tiltólista:
+    - Kuka: Nem felel meg valamiért (projekten belül)
+    - Tiltólista: Nem akarjuk foglalkoztatni (globálisan, nem éri meg)
+    """
+    # Jogosultság ellenőrzés
+    query = {"id": worker_id}
+    if user["role"] != "admin":
+        query["owner_id"] = user["id"]
+    
+    worker = await db.workers.find_one(query, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Dolgozó nem található vagy nincs jogosultságod")
+    
+    reason = data.get("reason", "")
+    if not reason:
+        raise HTTPException(status_code=400, detail="Indok megadása kötelező")
+    
+    # Globális státusz beállítása "Tiltólista"-ra
+    await db.workers.update_one(
+        {"id": worker_id},
+        {"$set": {"global_status": "Tiltólista"}}
+    )
+    
+    # Megjegyzés hozzáadása
+    auto_note = f"🚫 TILTÓLISTA: {reason} (Hozzáadva: {datetime.now().strftime('%Y.%m.%d')}, {user.get('name') or user['email']})"
+    
+    existing_notes = worker.get("notes", "")
+    if existing_notes:
+        new_notes = f"{existing_notes}\n\n{auto_note}"
+    else:
+        new_notes = auto_note
+    
+    await db.workers.update_one(
+        {"id": worker_id},
+        {"$set": {"notes": new_notes}}
+    )
+    
+    # Audit log
+    await audit_logger.log(
+        user_id=user["id"],
+        action="blacklist_add",
+        resource_type="worker",
+        resource_id=worker_id,
+        details={
+            "reason": reason,
+            "worker_name": worker["name"],
+            "added_by": user.get("name") or user["email"]
+        }
+    )
+    
+    return {
+        "success": True,
+        "message": "Dolgozó hozzáadva a Tiltólistához",
+        "worker_id": worker_id,
+        "global_status": "Tiltólista"
+    }
+
+
+@api_router.delete("/workers/{worker_id}/blacklist")
+async def remove_worker_from_blacklist(
+    worker_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Dolgozó eltávolítása a Tiltólistáról
+    Globális státusz visszaállítása "Feldolgozatlan"-ra
+    """
+    # Jogosultság ellenőrzés
+    query = {"id": worker_id}
+    if user["role"] != "admin":
+        query["owner_id"] = user["id"]
+    
+    worker = await db.workers.find_one(query, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Dolgozó nem található vagy nincs jogosultságod")
+    
+    # Globális státusz visszaállítása
+    await db.workers.update_one(
+        {"id": worker_id},
+        {"$set": {"global_status": "Feldolgozatlan"}}
+    )
+    
+    # Megjegyzés hozzáadása
+    auto_note = f"✅ Tiltólistáról eltávolítva ({datetime.now().strftime('%Y.%m.%d')}, {user.get('name') or user['email']})"
+    
+    existing_notes = worker.get("notes", "")
+    if existing_notes:
+        new_notes = f"{existing_notes}\n\n{auto_note}"
+    else:
+        new_notes = auto_note
+    
+    await db.workers.update_one(
+        {"id": worker_id},
+        {"$set": {"notes": new_notes}}
+    )
+    
+    # Audit log
+    await audit_logger.log(
+        user_id=user["id"],
+        action="blacklist_remove",
+        resource_type="worker",
+        resource_id=worker_id,
+        details={
+            "worker_name": worker["name"],
+            "removed_by": user.get("name") or user["email"]
+        }
+    )
+    
+    return {
+        "success": True,
+        "message": "Dolgozó eltávolítva a Tiltólistáról",
+        "worker_id": worker_id,
+        "global_status": "Feldolgozatlan"
+    }
+
+
+@api_router.post("/projects/{project_id}/workers/{worker_id}/blacklist")
+async def add_project_worker_to_blacklist(
+    project_id: str,
+    worker_id: str,
+    data: dict,
+    user: dict = Depends(get_current_user)
+):
+    """
+    Dolgozó Tiltólista státuszba helyezése projekten belül
+    """
+    project = await db.projects.find_one({"id": project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Projekt nem található")
+    
+    worker = await db.workers.find_one({"id": worker_id}, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Dolgozó nem található")
+    
+    reason = data.get("reason", "")
+    if not reason:
+        raise HTTPException(status_code=400, detail="Indok megadása kötelező")
+    
+    # Keressük meg a "Tiltólista" státuszt
+    tiltolista_status = await db.statuses.find_one({"name": "Tiltólista"}, {"_id": 0})
+    
+    if not tiltolista_status:
+        raise HTTPException(status_code=404, detail="Tiltólista státusz nem található")
+    
+    # Frissítjük a projekt-dolgozó kapcsolat státuszát
+    await db.project_workers.update_one(
+        {"project_id": project_id, "worker_id": worker_id},
+        {"$set": {
+            "status_id": tiltolista_status["id"],
+            "notes": f"Tiltólista indok: {reason}",
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Globális státusz is "Tiltólista"-ra (ha ez komolyabb)
+    await db.workers.update_one(
+        {"id": worker_id},
+        {"$set": {"global_status": "Tiltólista"}}
+    )
+    
+    # Megjegyzés hozzáadása
+    company_name = project.get("client_name") or project["name"]
+    auto_note = f"🚫 {company_name} ({project['name']}) - TILTÓLISTA: {reason}"
+    
+    existing_notes = worker.get("notes", "")
+    if existing_notes:
+        new_notes = f"{existing_notes}\n\n{auto_note}"
+    else:
+        new_notes = auto_note
+    
+    await db.workers.update_one(
+        {"id": worker_id},
+        {"$set": {"notes": new_notes}}
+    )
+    
+    # Worker log
+    project_display = f"{project['name']}"
+    if project.get("location"):
+        project_display += f" | {project['location']}"
+    
+    await add_worker_log(
+        worker_id=worker_id,
+        project_name=project_display,
+        status_name="Tiltólista",
+        notes=reason
+    )
+    
+    return {
+        "success": True,
+        "message": "Dolgozó Tiltólistára helyezve",
+        "project_id": project_id,
+        "worker_id": worker_id
+    }
+
 @api_router.get("/projects/{project_id}/summary")
 async def get_project_summary(project_id: str, user: dict = Depends(get_current_user)):
     """
