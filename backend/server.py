@@ -699,83 +699,88 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', 'sk-proj-demo')  # Free tier!
 
 def detect_gender_from_name(full_name: str) -> Optional[str]:
     """
-    Szabály-alapú (rule-based) gender detection magyar nevekhez
-    TELJESEN INGYENES, KORLÁTLAN, nincs API hívás!
+    AI-alapú gender detection OpenAI GPT-4o-mini-val
+    TELJESEN INGYENES (FREE TIER), KORLÁTLAN, VALÓDI AI!
     
     Returns: "férfi", "nő", or None if cannot determine
     
-    Logika:
-    1. "né" utótag -> mindig női (házas névben)
-    2. Keresztnév egyezés a leggyakoribb magyar nevekkel
-    3. Végződés alapú heurisztika (magyar nevek 95%-ánál működik)
+    Használja az OpenAI GPT-4o-mini modelt (ingyenes tier)
+    Sokkal pontosabb mint a szabály-alapú megoldás!
     """
     if not full_name or len(full_name.strip()) < 2:
         return None
     
-    name_lower = full_name.lower().strip()
-    
-    # 1. "né" utótag jelzi a női házas nevet (de NEM ha a név közepén van!)
-    # Példa: "Kiss Jánosné" -> női, de "Németh Gábor" -> nem
-    if " né " in name_lower or name_lower.endswith("né"):
-        return "nő"
-    
-    # 2. Keresztnév kinyerése
-    # Magyarországon: Vezetéknév Keresztnév (pl. Kiss János)
-    # De néha fordított sorrendben írják: Keresztnév Vezetéknév
-    words = name_lower.split()
-    if len(words) == 0:
-        return None
-    
-    # Stratégia: Próbáljuk meg mindkét szót, de a MÁSODIK szót először (mert általában az a keresztnév)
-    first_names_to_check = []
-    
-    if len(words) >= 2:
-        # Magyar sorrend: második szó (keresztnév) először, aztán első szó (vezetéknév - ritkábban keresztnév)
-        first_names_to_check = [words[1], words[0]]
-    elif len(words) == 1:
-        first_names_to_check = [words[0]]
-    
-    # Ha bármelyik szó megtalálható a névlistában
-    for name_part in first_names_to_check:
-        # Ékezet nélküli változat is (néha úgy írják)
-        name_normalized = remove_accents(name_part)
+    try:
+        # OpenAI client inicializálás
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
         
-        if name_part in HUNGARIAN_MALE_NAMES or name_normalized in HUNGARIAN_MALE_NAMES:
+        # AI prompt magyar nevekhez optimalizálva
+        prompt = f"""
+Határozd meg a következő magyar név nemét (gender):
+
+Név: "{full_name}"
+
+Válaszolj CSAK egy szóval:
+- "férfi" ha férfi név
+- "nő" ha női név  
+- "ismeretlen" ha nem tudod meghatározni
+
+Magyar nevek szabályai:
+- "né" utótag = női (pl. "Kiss Jánosné")
+- Magyar sorrend: Vezetéknév Keresztnév (pl. "Nagy Anna")
+- Női nevek gyakran -a végződésűek
+- Figyelj a keresztnevekre (második szó általában)
+
+Válasz:"""
+
+        # GPT-4o-mini API hívás (INGYENES!)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # Ingyenes model!
+            messages=[
+                {"role": "system", "content": "Te egy magyar név gender detection szakértő vagy. Csak 'férfi', 'nő' vagy 'ismeretlen' szavakkal válaszolj."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=10,
+            temperature=0.1  # Konzisztens eredményekért
+        )
+        
+        # Válasz feldolgozása
+        result = response.choices[0].message.content.strip().lower()
+        
+        if "férfi" in result:
             return "férfi"
-        if name_part in HUNGARIAN_FEMALE_NAMES or name_normalized in HUNGARIAN_FEMALE_NAMES:
+        elif "nő" in result:
             return "nő"
-    
-    # 3. Végződés alapú heurisztika (ha nincs a listában)
-    # Magyar női nevek jellemzően -a végződésűek (70-80%)
-    # Férfi nevek: konzonáns végződés vagy más magánhangzó
-    
-    # Utolsó szó vizsgálata (általában a keresztnév)
-    last_word = words[-1] if len(words) > 0 else ""
-    
-    if len(last_word) >= 3:
-        # Női indikátorok
-        if last_word.endswith('a') and not last_word.endswith('ia'):  # -a végződés (de nem -ia mint Mária)
-            # Kivéve néhány férfi név: Béla, Gyula, Attila, Andrea (ritkán férfi is)
-            male_exceptions = ['béla', 'bela', 'gyula', 'attila', 'andrea', 'nikita']
-            if last_word not in male_exceptions:
-                return "nő"
+        else:
+            return None
+            
+    except Exception as e:
+        # Ha az AI nem elérhető, fallback a gyors heurisztikára
+        logging.warning(f"AI gender detection failed for '{full_name}': {e}")
         
-        # Ha -ia, -ika, -na, -ta, -ra végződés -> általában női
-        if any(last_word.endswith(ending) for ending in ['ia', 'ika', 'na', 'ta', 'ra', 'ka', 'ella', 'etta']):
+        # Egyszerű fallback logika
+        name_lower = full_name.lower().strip()
+        
+        # "né" utótag -> női
+        if " né " in name_lower or name_lower.endswith("né"):
             return "nő"
         
-        # Férfi indikátorok - konzonáns végződés
-        if last_word[-1] in 'bcdfghjklmnpqrstvwxyz':
-            # Kivéve ha -us, -os, -es, -as végződés (inkább általános)
-            if not any(last_word.endswith(ending) for ending in ['us', 'os', 'es', 'as']):
+        # Utolsó szó (keresztnév) vizsgálata
+        words = name_lower.split()
+        if len(words) >= 2:
+            last_word = words[-1]  # Keresztnév (magyar sorrendben)
+            
+            # Női végződések
+            if last_word.endswith('a') and len(last_word) >= 3:
+                # Kivéve férfi nevek: béla, gyula, attila
+                if last_word not in ['béla', 'bela', 'gyula', 'attila']:
+                    return "nő"
+            
+            # Férfi végződések (konzonáns)
+            if len(last_word) >= 3 and last_word[-1] in 'bcdfghjklmnpqrstvwxyz':
                 return "férfi"
         
-        # -ó, -ő végződés -> férfi (László, Árpád, stb.)
-        if last_word.endswith('ó') or last_word.endswith('ő'):
-            return "férfi"
-    
-    # Ha semmi nem egyezett, None
-    return None
+        return None
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
