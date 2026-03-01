@@ -623,6 +623,56 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     
     return R * c
 
+# ==================== SEARCH HELPER FUNCTIONS ====================
+
+def remove_accents(text: str) -> str:
+    """
+    Remove Hungarian accents from text for accent-insensitive search
+    Example: "Gépkezelő" -> "Gepkezelo"
+    """
+    if not text:
+        return ""
+    # Normalize to NFD (decomposed form) and filter out combining characters
+    nfd = unicodedata.normalize('NFD', text)
+    return ''.join(char for char in nfd if unicodedata.category(char) != 'Mn')
+
+def create_flexible_search_regex(search_term: str) -> str:
+    """
+    Create MongoDB regex pattern for flexible, accent-insensitive search
+    Splits search term into words and creates pattern that matches any word
+    
+    Example:
+    Input: "operátor"
+    Output: Matches "CNC Gépkezelő", "Gépkezelő operátor", "Operátor"
+    """
+    if not search_term:
+        return ""
+    
+    # Remove accents from search term
+    normalized_search = remove_accents(search_term.lower())
+    
+    # Split into words
+    words = normalized_search.split()
+    
+    # Create regex pattern that matches any of the words
+    # (?i) for case insensitive
+    if len(words) == 1:
+        # Single word: match if it appears anywhere
+        return f".*{re.escape(words[0])}.*"
+    else:
+        # Multiple words: match if ANY word appears
+        word_patterns = [f".*{re.escape(word)}.*" for word in words]
+        return "|".join(word_patterns)
+
+def normalize_text_for_search(text: str) -> str:
+    """
+    Normalize text for storage in search-optimized field
+    Used for creating searchable versions of names, positions, etc.
+    """
+    if not text:
+        return ""
+    return remove_accents(text.lower())
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
