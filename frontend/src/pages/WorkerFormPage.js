@@ -411,11 +411,27 @@ export default function WorkerFormPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4">
-      <div className="flex items-center gap-3 mb-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/workers")} className="shrink-0">
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <h1 className="text-xl font-bold text-foreground">{isEdit ? "Szerkesztés" : "Új dolgozó"}</h1>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/workers")} className="shrink-0">
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <h1 className="text-xl font-bold text-foreground">{isEdit ? "Szerkesztés" : "Új dolgozó"}</h1>
+        </div>
+        
+        {/* CV Import gomb - csak új dolgozónál */}
+        {!isEdit && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setCvImportDialog(true)}
+            className="gap-2"
+          >
+            <Sparkles className="w-4 h-4" />
+            CV Import AI
+          </Button>
+        )}
       </div>
 
       <Card>
