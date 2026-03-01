@@ -3987,7 +3987,7 @@ async def import_workers_from_excel(
     settings: str = Form(...),  # JSON string of ExcelImportSettings
     user: dict = Depends(get_current_user)
 ):
-    """Import workers from Excel file with column mapping"""
+    """Import workers from Excel file with column mapping - HÁTTÉR FELDOLGOZÁS"""
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Csak .xlsx vagy .xls fájl tölthető fel")
     
@@ -4012,9 +4012,54 @@ async def import_workers_from_excel(
     if name_col is None:
         raise HTTPException(status_code=400, detail="Név oszlop megadása kötelező")
     
+    # Save file temporarily
+    contents = await file.read()
+    
+    # Create background job ID
+    job_id = str(uuid.uuid4())
+    
+    # Save job info for tracking
+    job_doc = {
+        "id": job_id,
+        "user_id": user["id"],
+        "status": "processing",
+        "total": 0,
+        "processed": 0,
+        "imported": 0,
+        "skipped": 0,
+        "errors": [],
+        "started_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.import_jobs.insert_one(job_doc)
+    
+    # Schedule background processing
+    scheduler.add_job(
+        process_excel_import_background,
+        args=[job_id, contents, column_mapping, worker_type_id, category, global_status, start_row, user["id"]],
+        id=f"import_job_{job_id}",
+        replace_existing=True
+    )
+    
+    return {
+        "message": "Import háttérben elindítva",
+        "job_id": job_id,
+        "status": "processing"
+    }
+
+
+async def process_excel_import_background(
+    job_id: str,
+    file_contents: bytes,
+    column_mapping: dict,
+    worker_type_id: str,
+    category: str,
+    global_status: str,
+    start_row: int,
+    user_id: str
+):
+    """Background job for processing Excel import with AI gender detection"""
     try:
-        contents = await file.read()
-        wb = load_workbook(filename=io.BytesIO(contents), read_only=True, data_only=True)
+        wb = load_workbook(filename=io.BytesIO(file_contents), read_only=True, data_only=True)
         ws = wb.active
         
         # Handle Google Sheets exported files where max_row can be None
@@ -4032,11 +4077,18 @@ async def import_workers_from_excel(
         
         # Process rows (up to 1000)
         max_rows = min(max_row, start_row + 1000)
+        total_rows = max_rows - start_row + 1
+        
+        # Update total count
+        await db.import_jobs.update_one(
+            {"id": job_id},
+            {"$set": {"total": total_rows}}
+        )
         
         for row_idx in range(start_row, max_rows + 1):
             try:
                 # Get name (required)
-                name_value = ws.cell(row=row_idx, column=name_col + 1).value  # +1 because openpyxl is 1-indexed
+                name_value = ws.cell(row=row_idx, column=column_mapping.get("name") + 1).value
                 if not name_value or str(name_value).strip() == "":
                     skipped_count += 1
                     continue
@@ -4065,6 +4117,13 @@ async def import_workers_from_excel(
                 notes_col = column_mapping.get("notes")
                 notes = str(ws.cell(row=row_idx, column=notes_col + 1).value or "").strip() if notes_col is not None else ""
                 
+                # 🤖 AI-ALAPÚ GENDER DETECTION
+                detected_gender = detect_gender_from_name(name)
+                
+                # Rate limit kezelés - max 30 név/perc
+                if imported_count > 0 and imported_count % 25 == 0:
+                    await asyncio.sleep(2)  # Kis szünet minden 25 név után
+                
                 # Create worker document
                 worker_doc = {
                     "id": str(uuid.uuid4()),
@@ -4078,14 +4137,26 @@ async def import_workers_from_excel(
                     "email": email,
                     "experience": experience,
                     "notes": notes,
+                    "gender": detected_gender,  # AI-alapú gender!
                     "global_status": global_status,
                     "tag_ids": [],
-                    "owner_id": user["id"],
+                    "owner_id": user_id,
                     "created_at": datetime.now(timezone.utc).isoformat()
                 }
                 
                 await db.workers.insert_one(worker_doc)
                 imported_count += 1
+                
+                # Update progress
+                processed = (row_idx - start_row + 1)
+                await db.import_jobs.update_one(
+                    {"id": job_id},
+                    {"$set": {
+                        "processed": processed,
+                        "imported": imported_count,
+                        "skipped": skipped_count
+                    }}
+                )
                 
             except Exception as e:
                 errors.append(f"Sor {row_idx}: {str(e)}")
@@ -4093,11 +4164,50 @@ async def import_workers_from_excel(
         
         wb.close()
         
-        return {
-            "message": f"{imported_count} dolgozó sikeresen importálva",
-            "imported": imported_count,
-            "skipped": skipped_count,
-            "errors": errors[:10] if errors else []  # Return first 10 errors
+        # Mark job as completed
+        await db.import_jobs.update_one(
+            {"id": job_id},
+            {"$set": {
+                "status": "completed",
+                "imported": imported_count,
+                "skipped": skipped_count,
+                "errors": errors[:10],
+                "completed_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        # 🔔 ÉRTESÍTÉS KÜLDÉSE A FELHASZNÁLÓNAK
+        await create_notification(
+            user_id=user_id,
+            notification_type="import_completed",
+            title="✅ Excel import befejezve",
+            message=f"{imported_count} dolgozó sikeresen importálva és nemük AI-val beazonosítva! ({skipped_count} átugorva)",
+            link="/workers"
+        )
+        
+        logger.info(f"Excel import completed: {imported_count} imported, {skipped_count} skipped")
+        
+    except Exception as e:
+        # Mark job as failed
+        await db.import_jobs.update_one(
+            {"id": job_id},
+            {"$set": {
+                "status": "failed",
+                "error": str(e),
+                "completed_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        # Send error notification
+        await create_notification(
+            user_id=user_id,
+            notification_type="import_failed",
+            title="❌ Excel import hiba",
+            message=f"Hiba történt az import során: {str(e)}",
+            link="/workers"
+        )
+        
+        logger.error(f"Excel import failed: {str(e)}")
         }
         
     except Exception as e:
