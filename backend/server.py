@@ -5989,6 +5989,15 @@ async def startup_event():
         replace_existing=True
     )
     logger.info("📊 Weekly summary email scheduled: Every Monday at 08:00")
+    
+    # Schedule GDPR old workers notification (every 1st of month at 9:00 AM)
+    scheduler.add_job(
+        check_old_workers_notification,
+        CronTrigger(day=1, hour=9, minute=0),
+        id="gdpr_old_workers_check",
+        replace_existing=True
+    )
+    logger.info("⚠️ GDPR old workers check scheduled: Every 1st of month at 09:00")
 
 
 @app.on_event("shutdown")
