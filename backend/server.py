@@ -1461,7 +1461,8 @@ async def get_workers(
             {"email": {"$regex": search, "$options": "i"}},
             {"address": {"$regex": search_regex, "$options": "i"}},
             {"experience": {"$regex": search_regex, "$options": "i"}},
-            {"position": {"$regex": search_regex, "$options": "i"}}
+            {"position": {"$regex": search_regex, "$options": "i"}},
+            {"notes": {"$regex": search_regex, "$options": "i"}}  # ÚJ: Jegyzetek keresés (skills ide kerülnek!)
         ]
     
     # Projekt státusz szűrő - előre lekérjük a megfelelő worker_id-kat
