@@ -1496,6 +1496,7 @@ async def get_workers(
         # Új mezők
         w["work_type"] = w.get("work_type", "")
         w["has_car"] = w.get("has_car", "")
+        w["gender"] = w.get("gender")  # ÚJ: Nem
         
         # Get tags
         tag_ids = w.get("tag_ids", [])
