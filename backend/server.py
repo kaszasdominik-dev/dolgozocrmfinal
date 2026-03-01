@@ -673,6 +673,67 @@ def normalize_text_for_search(text: str) -> str:
         return ""
     return remove_accents(text.lower())
 
+# ==================== GENDER DETECTION ====================
+
+# Common Hungarian male and female names
+MALE_FIRST_NAMES = {
+    "jános", "józsef", "lászló", "istván", "ferenc", "zoltán", "gábor", "sándor",
+    "péter", "attila", "tamás", "andrás", "györgy", "mihály", "imre", "csaba",
+    "tibor", "béla", "lajos", "endre", "balázs", "dávid", "ádám", "márk",
+    "levente", "bence", "máté", "patrik", "viktor", "gergő", "norbert", "krisztián",
+    "zsolt", "róbert", "richárd", "dániel", "roland", "kornél", "dömötör", "bendegúz"
+}
+
+FEMALE_FIRST_NAMES = {
+    "mária", "katalin", "ilona", "erzsébet", "anna", "zsuzsanna", "margit", "judit",
+    "éva", "ágnes", "gabriella", "andrea", "mónika", "szilvia", "erika", "tímea",
+    "renáta", "petra", "eszter", "réka", "dóra", "kitti", "viktória", "beatrix",
+    "barbara", "krisztina", "nikolett", "fanni", "alexandra", "laura", "kinga",
+    "anita", "emese", "csilla", "bernadett", "melinda", "boglárka", "edina"
+}
+
+def detect_gender_from_name(full_name: str) -> Optional[str]:
+    """
+    Detect gender from Hungarian name
+    Returns: "férfi", "nő", or None if cannot determine
+    
+    Logic:
+    1. Extract first name (before space or after space if "XY-né" pattern)
+    2. Check against Hungarian name lists
+    3. Check for "né" suffix (indicates female: married name)
+    """
+    if not full_name:
+        return None
+    
+    name_lower = remove_accents(full_name.lower())
+    
+    # Check for "né" suffix (e.g., "Kovács János-né" or "Kiss Máriáné")
+    if "ne" in name_lower or "-ne" in name_lower:
+        return "nő"
+    
+    # Split name and get first name
+    # Hungarian names: Last Name First Name (e.g., "Kovács János")
+    # But sometimes First Name Last Name in modern usage
+    parts = name_lower.split()
+    if len(parts) < 2:
+        return None
+    
+    # Try both first and second word as first name
+    possible_first_names = [
+        remove_accents(parts[0].lower()),
+        remove_accents(parts[1].lower()) if len(parts) > 1 else None
+    ]
+    
+    for first_name in possible_first_names:
+        if not first_name:
+            continue
+        if first_name in MALE_FIRST_NAMES:
+            return "férfi"
+        if first_name in FEMALE_FIRST_NAMES:
+            return "nő"
+    
+    return None
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
