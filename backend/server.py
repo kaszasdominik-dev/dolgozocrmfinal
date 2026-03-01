@@ -211,7 +211,11 @@ class WorkerCreate(BaseModel):
     work_type: Optional[str] = ""  # Munkavégzés típusa: "Ingázó", "Szállásos", ""
     has_car: Optional[str] = ""  # Saját autó: "Van", "Nincs", ""
     initial_status: Optional[str] = None  # Projekt státusz létrehozáskor (ha project_id van)
-    gender: Optional[str] = None  # ÚJ: Nem: "férfi", "nő" (automatikusan detektálva névből, de felülírható)
+    gender: Optional[str] = None  # Nem: "férfi", "nő"
+    # GDPR mezők
+    consent_given: Optional[bool] = False  # Beleegyezés adott
+    consent_date: Optional[str] = None  # Beleegyezés dátuma
+    processing_basis: Optional[str] = "legitimate_interest"  # jogos_erdek, beleegyezes, szerzodes
 
 class WorkerUpdate(BaseModel):
     name: Optional[str] = None
