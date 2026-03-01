@@ -674,6 +674,17 @@ export default function WorkersPage() {
                 </SelectContent>
               </Select>
 
+              <Select value={genderFilter} onValueChange={(v) => setGenderFilter(v === "_all" ? "" : v)}>
+                <SelectTrigger className="w-[110px] h-9" data-testid="gender-filter">
+                  <SelectValue placeholder="Nem" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">Mindegy</SelectItem>
+                  <SelectItem value="férfi">👨 Férfi</SelectItem>
+                  <SelectItem value="nő">👩 Nő</SelectItem>
+                </SelectContent>
+              </Select>
+
               <Select value={propertyFilter} onValueChange={(v) => setPropertyFilter(v === "_all" ? "" : v)}>
                 <SelectTrigger className="w-[150px] h-9" data-testid="property-filter">
                   <SelectValue placeholder="Tulajdonság" />
