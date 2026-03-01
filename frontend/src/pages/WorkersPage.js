@@ -113,12 +113,12 @@ export default function WorkersPage() {
     if (filtersLoaded) {
       saveFilters({
         search, typeFilter, tagFilter, ownerFilter, advancedOpen,
-        countyFilter, positionFilter, workTypeFilter, hasCarFilter, globalStatusFilter, propertyFilter,
+        countyFilter, positionFilter, workTypeFilter, hasCarFilter, globalStatusFilter, propertyFilter, genderFilter,
         dateFrom, dateTo, locationSearch, centerLat, centerLon, radiusKm, locationEnabled
       });
     }
   }, [search, typeFilter, tagFilter, ownerFilter, advancedOpen,
-      countyFilter, positionFilter, workTypeFilter, hasCarFilter, globalStatusFilter, propertyFilter,
+      countyFilter, positionFilter, workTypeFilter, hasCarFilter, globalStatusFilter, propertyFilter, genderFilter,
       dateFrom, dateTo, locationSearch, centerLat, centerLon, radiusKm, locationEnabled, filtersLoaded]);
   
   useEffect(() => {
