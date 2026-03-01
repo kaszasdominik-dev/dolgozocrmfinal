@@ -6673,3 +6673,162 @@ async def gdpr_retention_check(
         "orphaned_workers": orphaned_workers,
         "total_to_review": len(expired_workers) + len(orphaned_workers)
     }
+
+
+
+
+# ==================== WEEKLY SUMMARY EMAIL ====================
+
+async def weekly_summary_email():
+    """
+    Heti összefoglaló email küldése az adminnak
+    Megmutatja ki hány dolgozót vitt be az elmúlt 7 napban
+    """
+    try:
+        logger.info("🔔 Heti összefoglaló email generálása...")
+        
+        # Admin user keresése
+        admin = await db.users.find_one({"email": "kaszasdominik@gmail.com"}, {"_id": 0})
+        if not admin:
+            logger.warning("Admin user nem található, heti összefoglaló kihagyva")
+            return
+        
+        # Admin Gmail token ellenőrzése
+        gmail_token = await db.gmail_tokens.find_one({"user_id": admin["id"]})
+        if not gmail_token:
+            logger.warning("Admin Gmail token nincs, heti összefoglaló kihagyva")
+            return
+        
+        # Elmúlt 7 nap
+        week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        week_ago_iso = week_ago.isoformat()
+        
+        # Összes user lekérése
+        users = await db.users.find({}, {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1}).to_list(100)
+        
+        # Statisztika gyűjtése userenként
+        user_stats = []
+        total_workers = 0
+        
+        for user in users:
+            # Dolgozók száma az elmúlt 7 napban
+            worker_count = await db.workers.count_documents({
+                "owner_id": user["id"],
+                "created_at": {"$gte": week_ago_iso}
+            })
+            
+            if worker_count > 0:
+                user_stats.append({
+                    "name": user.get("name") or user["email"],
+                    "email": user["email"],
+                    "role": user["role"],
+                    "workers_added": worker_count
+                })
+                total_workers += worker_count
+        
+        # Rendezés dolgozók száma szerint (csökkenő)
+        user_stats.sort(key=lambda x: x["workers_added"], reverse=True)
+        
+        # Email HTML generálása
+        html_body = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }}
+                .header h1 {{ margin: 0; font-size: 28px; }}
+                .content {{ background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }}
+                .summary {{ background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #667eea; }}
+                .summary h2 {{ margin-top: 0; color: #667eea; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 15px; background: white; border-radius: 8px; overflow: hidden; }}
+                th {{ background: #667eea; color: white; padding: 12px; text-align: left; }}
+                td {{ padding: 12px; border-bottom: 1px solid #e5e7eb; }}
+                tr:last-child td {{ border-bottom: none; }}
+                .badge {{ display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }}
+                .badge-admin {{ background: #fef3c7; color: #92400e; }}
+                .badge-user {{ background: #dbeafe; color: #1e40af; }}
+                .total {{ background: #10b981; color: white; padding: 15px; border-radius: 8px; text-align: center; font-size: 20px; font-weight: bold; margin-top: 20px; }}
+                .footer {{ text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>📊 Heti Összefoglaló</h1>
+                    <p style="margin: 10px 0 0 0; opacity: 0.9;">{week_ago.strftime('%Y.%m.%d')} - {datetime.now().strftime('%Y.%m.%d')}</p>
+                </div>
+                <div class="content">
+                    <div class="summary">
+                        <h2>Teljesítmény Összesítő</h2>
+                        <p>Az elmúlt 7 napban összesen <strong>{total_workers} dolgozó</strong> került felvitelre az adatbázisba.</p>
+                    </div>
+                    
+                    <h3 style="color: #374151; margin-bottom: 15px;">👥 Toborzói Teljesítmény</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Név</th>
+                                <th>Szerepkör</th>
+                                <th style="text-align: center;">Felvitt Dolgozók</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        """
+        
+        if user_stats:
+            for stat in user_stats:
+                role_badge = "badge-admin" if stat["role"] == "admin" else "badge-user"
+                role_text = "Admin" if stat["role"] == "admin" else "Toborzó"
+                html_body += f"""
+                            <tr>
+                                <td><strong>{stat["name"]}</strong><br><small style="color: #6b7280;">{stat["email"]}</small></td>
+                                <td><span class="badge {role_badge}">{role_text}</span></td>
+                                <td style="text-align: center; font-size: 20px; font-weight: bold; color: #667eea;">{stat["workers_added"]}</td>
+                            </tr>
+                """
+        else:
+            html_body += """
+                            <tr>
+                                <td colspan="3" style="text-align: center; color: #6b7280; padding: 30px;">
+                                    Nincs új dolgozó az elmúlt héten
+                                </td>
+                            </tr>
+            """
+        
+        html_body += f"""
+                        </tbody>
+                    </table>
+                    
+                    <div class="total">
+                        Összesen: {total_workers} dolgozó
+                    </div>
+                    
+                    <div class="footer">
+                        <p>Dolgozó CRM - Automatikus Heti Riport</p>
+                        <p><small>Ez az email automatikusan lett elküldve minden hétfő reggel 8:00-kor</small></p>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Email küldése a bulk_email modul használatával
+        from bulk_email import send_email_via_gmail
+        
+        await send_email_via_gmail(
+            gmail_token=gmail_token,
+            to_email=admin["email"],  # kaszasdominik@gmail.com
+            subject=f"📊 Heti Összefoglaló - {total_workers} új dolgozó ({week_ago.strftime('%m.%d')} - {datetime.now().strftime('%m.%d')})",
+            body=html_body
+        )
+        
+        logger.info(f"✅ Heti összefoglaló email elküldve: {admin['email']}, {total_workers} dolgozó")
+        
+    except Exception as e:
+        logger.error(f"❌ Heti összefoglaló email hiba: {e}", exc_info=True)
+
+
+# Schedule heti összefoglaló
+# Hozzáadandó a startup_event() függvényhez
