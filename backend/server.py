@@ -6672,6 +6672,298 @@ async def gdpr_export_worker_data(
     GDPR: Jog az adatokhoz (Right to Access)
     Dolgozó összes adatának exportálása JSON formátumban
     """
+
+
+
+# ==================== 2 ÉVES DOLGOZÓK KEZELÉSE (GDPR) ====================
+
+@api_router.get("/admin/workers/old-workers")
+async def get_old_workers(
+    user: dict = Depends(require_admin)
+):
+    """
+    2 éves vagy régebbi dolgozók listázása (GDPR adatmegőrzés)
+    Admin látja mely dolgozókat kellene törölni
+    """
+    # 2 éve (730 nap)
+    two_years_ago = datetime.now(timezone.utc) - timedelta(days=730)
+    two_years_ago_iso = two_years_ago.isoformat()
+    
+    # Dolgozók akik 2+ éve lettek létrehozva
+    old_workers = await db.workers.find(
+        {"created_at": {"$lt": two_years_ago_iso}},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(10000)
+    
+    # Részletes info minden dolgozóról
+    result = []
+    for w in old_workers:
+        # Owner info
+        owner = await db.users.find_one({"id": w["owner_id"]}, {"_id": 0, "password": 0})
+        owner_name = owner.get("name") or owner["email"] if owner else "Ismeretlen"
+        
+        # Projekt státuszok
+        project_count = await db.project_workers.count_documents({"worker_id": w["id"]})
+        
+        # Utolsó aktivitás (email log)
+        last_email = await db.email_logs.find_one(
+            {"worker_id": w["id"]},
+            {"_id": 0, "sent_at": 1}
+        )
+        last_activity = last_email["sent_at"] if last_email else w["created_at"]
+        
+        # Számítsuk ki mennyi ideje
+        created = datetime.fromisoformat(w["created_at"].replace('Z', '+00:00'))
+        days_old = (datetime.now(timezone.utc) - created).days
+        years_old = round(days_old / 365, 1)
+        
+        result.append({
+            "id": w["id"],
+            "name": w["name"],
+            "phone": w["phone"],
+            "email": w.get("email", ""),
+            "global_status": w.get("global_status", "Feldolgozatlan"),
+            "created_at": w["created_at"],
+            "days_old": days_old,
+            "years_old": years_old,
+            "owner_id": w["owner_id"],
+            "owner_name": owner_name,
+            "project_count": project_count,
+            "last_activity": last_activity
+        })
+    
+    return {
+        "old_workers": result,
+        "total_count": len(result),
+        "cutoff_date": two_years_ago_iso,
+        "message": f"{len(result)} dolgozó van 2+ éves az adatbázisban"
+    }
+
+
+@api_router.delete("/admin/workers/delete-old-workers")
+async def delete_old_workers(
+    data: dict,
+    user: dict = Depends(require_admin)
+):
+    """
+    2+ éves dolgozók TÖMEGES törlése
+    FIGYELEM: Ez VÉGLEGES törlés!
+    
+    Body:
+    {
+        "worker_ids": ["id1", "id2", ...],  // Opcionális: konkrét ID-k
+        "delete_all_old": true  // Ha true, akkor MINDEN 2+ éves dolgozó törlődik
+    }
+    """
+    worker_ids = data.get("worker_ids", [])
+    delete_all = data.get("delete_all_old", False)
+    
+    if not worker_ids and not delete_all:
+        raise HTTPException(
+            status_code=400,
+            detail="Vagy add meg a worker_ids listát, vagy állítsd be delete_all_old=true"
+        )
+    
+    # Ha delete_all, akkor gyűjtsük össze az összes 2+ éves dolgozót
+    if delete_all:
+        two_years_ago = datetime.now(timezone.utc) - timedelta(days=730)
+        two_years_ago_iso = two_years_ago.isoformat()
+        
+        old_workers = await db.workers.find(
+            {"created_at": {"$lt": two_years_ago_iso}},
+            {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1}
+        ).to_list(10000)
+        
+        worker_ids = [w["id"] for w in old_workers]
+    
+    if not worker_ids:
+        return {
+            "success": True,
+            "deleted_count": 0,
+            "message": "Nincs törlendő dolgozó"
+        }
+    
+    # Audit log MINDEN dolgozóról a törlés előtt
+    for wid in worker_ids:
+        worker = await db.workers.find_one({"id": wid}, {"_id": 0})
+        if worker:
+            await audit_logger.log(
+                user_id=user["id"],
+                action="old_worker_deleted",
+                resource_type="worker",
+                resource_id=wid,
+                details={
+                    "reason": "2+ éves dolgozó törlése (GDPR adatmegőrzés)",
+                    "worker_name": worker.get("name"),
+                    "worker_email": worker.get("email"),
+                    "worker_phone": worker.get("phone"),
+                    "created_at": worker.get("created_at"),
+                    "deleted_by": user["email"]
+                }
+            )
+    
+    # 1. Dolgozók törlése
+    deleted_workers = await db.workers.delete_many({"id": {"$in": worker_ids}})
+    
+    # 2. Projekt kapcsolatok törlése
+    await db.project_workers.delete_many({"worker_id": {"$in": worker_ids}})
+    
+    # 3. Email logok törlése
+    await db.email_logs.delete_many({"worker_id": {"$in": worker_ids}})
+    
+    # 4. Email queue törlése
+    await db.email_queue.delete_many({"worker_id": {"$in": worker_ids}})
+    
+    # 5. Unsubscribe tokenek törlése
+    await db.unsubscribe_tokens.delete_many({"worker_id": {"$in": worker_ids}})
+    
+    # 6. Worker logs törlése
+    await db.worker_logs.delete_many({"worker_id": {"$in": worker_ids}})
+    
+    return {
+        "success": True,
+        "deleted_count": deleted_workers.deleted_count,
+        "message": f"{deleted_workers.deleted_count} dolgozó és kapcsolódó adataik véglegesen törölve (2+ éves dolgozók)",
+        "worker_ids": worker_ids
+    }
+
+
+# Automatikus emlékeztető adminnak 2+ éves dolgozókról
+async def check_old_workers_notification():
+    """
+    Automatikus emlékeztető email adminnak havi egyszer
+    Ha van 2+ éves dolgozó az adatbázisban
+    """
+    try:
+        logger.info("🔔 2+ éves dolgozók ellenőrzése...")
+        
+        # Admin user keresése
+        admin = await db.users.find_one({"email": "kaszasdominik@gmail.com"}, {"_id": 0})
+        if not admin:
+            return
+        
+        # Admin Gmail token ellenőrzése
+        gmail_token = await db.gmail_tokens.find_one({"user_id": admin["id"]})
+        if not gmail_token:
+            return
+        
+        # 2 éve
+        two_years_ago = datetime.now(timezone.utc) - timedelta(days=730)
+        two_years_ago_iso = two_years_ago.isoformat()
+        
+        # Dolgozók száma akik 2+ évesek
+        old_worker_count = await db.workers.count_documents({
+            "created_at": {"$lt": two_years_ago_iso}
+        })
+        
+        if old_worker_count == 0:
+            logger.info("✅ Nincs 2+ éves dolgozó")
+            return
+        
+        # Top 20 legrégebbi dolgozó
+        old_workers = await db.workers.find(
+            {"created_at": {"$lt": two_years_ago_iso}},
+            {"_id": 0, "id": 1, "name": 1, "phone": 1, "email": 1, "created_at": 1, "global_status": 1}
+        ).sort("created_at", 1).limit(20).to_list(20)
+        
+        # Email HTML generálása
+        html_body = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }}
+                .header h1 {{ margin: 0; font-size: 28px; }}
+                .content {{ background: #fef2f2; padding: 30px; border-radius: 0 0 10px 10px; }}
+                .warning {{ background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ef4444; }}
+                .warning h2 {{ margin-top: 0; color: #ef4444; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 15px; background: white; border-radius: 8px; overflow: hidden; }}
+                th {{ background: #ef4444; color: white; padding: 12px; text-align: left; font-size: 14px; }}
+                td {{ padding: 12px; border-bottom: 1px solid #fecaca; font-size: 13px; }}
+                tr:last-child td {{ border-bottom: none; }}
+                .btn {{ display: inline-block; background: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 20px; }}
+                .footer {{ text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>⚠️ GDPR Figyelmeztetés</h1>
+                    <p style="margin: 10px 0 0 0; opacity: 0.9;">2+ éves dolgozók az adatbázisban</p>
+                </div>
+                <div class="content">
+                    <div class="warning">
+                        <h2>Adatmegőrzési figyelmeztetés</h2>
+                        <p><strong>{old_worker_count} dolgozó</strong> van az adatbázisban, akik <strong>2 évnél régebben</strong> lettek felvéve.</p>
+                        <p>GDPR szerint ezeket az adatokat törölni kell, hacsak nincs jogos indok a megtartásukra.</p>
+                    </div>
+                    
+                    <h3 style="color: #374151; margin-bottom: 15px;">📋 Legrégebbi 20 dolgozó</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Név</th>
+                                <th>Telefon</th>
+                                <th>Felvéve</th>
+                                <th>Státusz</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        """
+        
+        for w in old_workers:
+            created = datetime.fromisoformat(w["created_at"].replace('Z', '+00:00'))
+            years_ago = round((datetime.now(timezone.utc) - created).days / 365, 1)
+            html_body += f"""
+                            <tr>
+                                <td><strong>{w["name"]}</strong></td>
+                                <td>{w["phone"]}</td>
+                                <td>{created.strftime('%Y.%m.%d')}<br><small style="color: #ef4444;">({years_ago} éve)</small></td>
+                                <td>{w.get("global_status", "N/A")}</td>
+                            </tr>
+            """
+        
+        html_body += f"""
+                        </tbody>
+                    </table>
+                    
+                    <div style="background: white; padding: 20px; border-radius: 8px; margin-top: 20px;">
+                        <h3 style="color: #374151; margin-top: 0;">Mit kell tenned?</h3>
+                        <ol>
+                            <li>Jelentkezz be a CRM-be admin fiókkal</li>
+                            <li>Menj az Admin menübe</li>
+                            <li>Nézd át a 2+ éves dolgozók listáját</li>
+                            <li>Döntsd el melyeket tartod meg, melyeket törölsz</li>
+                            <li>Töröld a felesleges adatokat</li>
+                        </ol>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>Dolgozó CRM - Automatikus GDPR Emlékeztető</p>
+                        <p><small>Ez az email automatikusan lett elküldve minden hónap 1-jén</small></p>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Email küldése
+        from bulk_email import send_email_via_gmail
+        
+        await send_email_via_gmail(
+            gmail_token=gmail_token,
+            to_email=admin["email"],
+            subject=f"⚠️ GDPR Figyelmeztetés - {old_worker_count} dolgozó 2+ éves",
+            body=html_body
+        )
+        
+        logger.info(f"✅ GDPR emlékeztető email elküldve: {old_worker_count} dolgozó")
+        
+    except Exception as e:
+        logger.error(f"❌ GDPR emlékeztető hiba: {e}", exc_info=True)
+
     # Jogosultság ellenőrzés
     query = {"id": worker_id}
     if user["role"] != "admin":
