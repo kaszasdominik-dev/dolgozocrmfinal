@@ -377,7 +377,7 @@ export default function WorkersPage() {
                      filterProjectId || projectStatusFilter;
 
   const hasAdvancedFilters = countyFilter || positionFilter || workTypeFilter || hasCarFilter || 
-                             globalStatusFilter || dateFrom || dateTo || locationEnabled ||
+                             globalStatusFilter || genderFilter || dateFrom || dateTo || locationEnabled ||
                              filterProjectId || projectStatusFilter;
 
   const handleLocationSearch = async () => {
