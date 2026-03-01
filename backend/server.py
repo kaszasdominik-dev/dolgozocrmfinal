@@ -5286,10 +5286,14 @@ async def add_lead_to_main_database(lead_id: str, data: dict, user: dict = Depen
     # Get worker type
     worker_type = await db.worker_types.find_one({}, {"_id": 0})
     
+    # 🤖 AI-alapú gender detection
+    worker_name = data.get("name", lead.get("name", ""))
+    detected_gender = detect_gender_from_name(worker_name)
+    
     # Create new worker
     worker_doc = {
         "id": str(uuid.uuid4()),
-        "name": data.get("name", lead.get("name", "")),
+        "name": worker_name,
         "phone": data.get("phone", lead.get("phone", "")),
         "address": data.get("address", lead.get("address", "")),
         "email": data.get("email", lead.get("email", "")),
@@ -5301,6 +5305,7 @@ async def add_lead_to_main_database(lead_id: str, data: dict, user: dict = Depen
         "work_type": data.get("work_type", "Ingázó"),
         "has_car": data.get("has_car", ""),
         "experience": "",
+        "gender": detected_gender,  # AI-alapú gender
         "global_status": "Feldolgozatlan",
         "owner_id": user["id"],
         "created_at": datetime.now(timezone.utc).isoformat(),
