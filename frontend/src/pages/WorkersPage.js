@@ -84,6 +84,7 @@ export default function WorkersPage() {
   const [hasCarFilter, setHasCarFilter] = useState(savedFilters?.hasCarFilter || "");
   const [globalStatusFilter, setGlobalStatusFilter] = useState(savedFilters?.globalStatusFilter || "");
   const [propertyFilter, setPropertyFilter] = useState(savedFilters?.propertyFilter || "");
+  const [genderFilter, setGenderFilter] = useState(savedFilters?.genderFilter || "");  // ÚJ: Nem szűrő
   const [dateFrom, setDateFrom] = useState(savedFilters?.dateFrom || "");
   const [dateTo, setDateTo] = useState(savedFilters?.dateTo || "");
   
