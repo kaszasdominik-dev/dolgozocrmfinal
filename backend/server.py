@@ -692,51 +692,55 @@ def normalize_text_for_search(text: str) -> str:
 # ==================== SZABÁLY-ALAPÚ MAGYAR NÉV GENDER DETECTION ====================
 # Teljesen INGYENES, KORLÁTLAN használat, nincs API hívás!
 
-# Magyar férfi nevek adatbázisa (leggyakoribb ~500 név)
+# Magyar + Szlovák férfi nevek adatbázisa (leggyakoribb ~700 név)
 HUNGARIAN_MALE_NAMES = {
     # A-betűs férfi nevek
-    "ábel", "ábrahám", "ádám", "adolf", "adrian", "adrián", "ákos", "aladár", "alberta", "alberta",
-    "albin", "alex", "alexander", "alfréd", "alfonz", "ámos", "ana", "anastasius", "andor", "andrás",
-    "angelo", "antal", "antigonus", "ármin", "arnold", "árpád", "artúr", "atanáz", "attila", "auguszt",
-    "aurél", "axel",
+    "ábel", "ábrahám", "ádám", "adolf", "adrian", "adrián", "ákos", "aladár", "albin", "alex", 
+    "alexander", "alfréd", "alfonz", "ámos", "andor", "andrás", "angelo", "antal", "ármin", "arnold", 
+    "árpád", "artúr", "atanáz", "attila", "auguszt", "aurél", "axel",
     # B-betűs férfi nevek
     "balázs", "bálint", "barnabás", "béla", "benedek", "benjámin", "bereck", "bertalan", "bertold",
-    "botond", "buda", "българия",
+    "botond", "branislav", "bruno",
     # C-D betűs férfi nevek
-    "călin", "csongor", "csaba", "dani", "dániel", "dávid", "demeter", "dénes", "denis", "desző",
-    "dezső", "dominik", "donát", "doms",
+    "csongor", "csaba", "dani", "dániel", "dávid", "demeter", "dénes", "denis", "dezső", "dominik", 
+    "donát", "dusan", "dušan",
     # E-F betűs férfi nevek
-    "ede", "edgár", "edmund", "edwin", "egon", "elektro", "elemér", "emil", "erik", "ernő",
-    "ervin", "eugene", "félix", "feri", "ferenc", "flórián", "frigyes", "fülöp",
+    "ede", "edgár", "edmund", "edwin", "egon", "elemér", "emil", "erik", "ernő", "ervin", 
+    "eugene", "félix", "feri", "ferenc", "ferdinand", "filip", "flórián", "frantisek", "františek", "frigyes", "fülöp",
     # G-betűs férfi nevek
-    "gábor", "gabor", "gáspár", "gaspar", "gedeon", "gellért", "géza", "geza", "gusztáv", "gyorgy", "györgy", "gyula", "gerg",
+    "gábor", "gabor", "gáspár", "gaspar", "gedeon", "gellért", "géza", "geza", "gusztáv", "gyorgy", 
+    "györgy", "gyula", "gejza",
     # H-I betűs férfi nevek
-    "harold", "henrik", "herbert", "hunor", "ignác", "ilja", "imre", "istván", "iván", "iver", "izidor",
+    "harold", "henrik", "herbert", "hunor", "ignác", "igor", "ilja", "imre", "istván", "ivan", "iván", "izidor",
     # J-K betűs férfi nevek
-    "jakab", "jános", "jeromos", "joachim", "jób", "jonathon", "józsef", "józsef", "joszef", "jozsua",
-    "judás", "julián", "julius", "jusztin", "kálmán", "kamil", "károly", "kende", "kenny", "kelemen",
-    "kornél", "konrád", "kornélia", "krisztián", "kristóf", "kund", "kunó",
+    "jakab", "jakub", "ján", "jan", "jános", "janko", "jaromir", "jaroslav", "jeromos", "joachim", 
+    "jób", "jonathon", "jozef", "jozef", "józsef", "juraj", "justin", "jusztin",
+    "kálmán", "kamil", "karol", "károly", "kende", "kenny", "kelemen", "koloman", "kornél", "konrád", 
+    "krištof", "krisztián", "kristóf", "kund", "kunó",
     # L-betűs férfi nevek
-    "lajos", "lászló", "lefty", "leó", "leon", "leopold", "levente", "lóránt", "loránd", "lothar",
-    "lőrinc", "lubos", "lucifer", "lucius", "ludvig", "lukács",
+    "ladislav", "lajos", "laszlo", "lászló", "lefty", "leó", "leon", "leonard", "leopold", "levente", 
+    "lóránt", "loránd", "lothar", "lőrinc", "lubos", "luboš", "lucius", "ludovit", "ludovít", "ludvig", "lukács", "lukáš", "lukas",
     # M-betűs férfi nevek
-    "marcell", "márió", "márk", "márton", "máté", "mátyás", "maurice", "max", "maximilian", "menyhért",
-    "merlin", "michael", "mihály", "miklós", "milán", "mitchell", "móric", "mór",
+    "marcell", "marek", "marian", "marián", "marko", "márkó", "márió", "márk", "márton", "martin", 
+    "mato", "matej", "máté", "mátyás", "maurice", "max", "maximilian", "menyhért", "merlin", "michael", 
+    "michal", "mihály", "mikuláš", "mikulas", "miklós", "milán", "milan", "milos", "miloš", "miroslav", "mitchell", "móric", "mór",
     # N-O betűs férfi nevek
-    "nándor", "nemanja", "norbert", "ödön", "olivér", "orbán", "oszkár", "ottó", "ottokár",
+    "nándor", "nemanja", "norbert", "oldrich", "oldřich", "oliver", "olivér", "ondrej", "ondřej", 
+    "orbán", "oszkár", "ottó", "ottokár", "otto",
     # P-R betűs férfi nevek
-    "pál", "patrik", "péter", "philip", "rafael", "ramón", "rené", "rezső", "richárd", "riley",
-    "robi", "robert", "róbert", "roland", "rudolf", "rupert",
+    "pál", "patrik", "pavol", "peter", "péter", "philip", "prokop", "rafael", "radoslav", "ramón", 
+    "rené", "rezső", "richárd", "riley", "robi", "robert", "róbert", "roland", "roman", "rostislav", "rudolf", "rupert",
     # S-betűs férfi nevek
-    "samu", "sámuel", "sándor", "salamon", "sebestyén", "szilárd", "szilveszter", "simeon", "solomon",
-    "soma", "stefan", "sándor", "szilárd", "szilveszter",
+    "samuel", "samu", "sámuel", "sándor", "salamon", "sebastian", "sebastián", "sebestyén", "szilárd", 
+    "szilveszter", "simeon", "slavomir", "šimon", "solomon", "soma", "stanislav", "stefan", "štefan", 
+    "stepan", "svetozar",
     # T-U-V betűs férfi nevek
-    "tamás", "tas", "teodor", "tibor", "tiborc", "tihamér", "tódor", "todor", "toma", "töhötöm",
-    "uma", "unoka", "urban", "vadim", "valentin", "varga", "vazul", "vendel", "vencel", "vidor",
-    "viktor", "vilhelm", "vilmos", "vince", "virgil", "володимир",
+    "tamás", "tas", "teodor", "tibor", "tiborc", "tihamér", "tódor", "todor", "toma", "tomas", "tomáš", 
+    "töhötöm", "uma", "unoka", "urban", "vadim", "valentin", "vaclav", "václav", "varga", "vazul", 
+    "vendel", "vencel", "vidor", "viktor", "vilhelm", "viliam", "vilmos", "vince", "virgil", "vojtech", "vlastimil",
     # W-Z betűs férfi nevek
-    "walter", "wenzel", "wesley", "willi", "wolfgang", "xavier", "zako", "zakariás", "zoltán",
-    "zsigmond", "zsolt",
+    "walter", "wenzel", "wesley", "willi", "wolfgang", "xavier", "zako", "zakariás", "zdenko", "zdeněk", 
+    "zoltan", "zoltán", "zsigmond", "zsolt",
 }
 
 # Magyar női nevek adatbázisa (leggyakoribb ~500 név)
