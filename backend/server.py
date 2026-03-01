@@ -6445,3 +6445,231 @@ async def get_worker_email_history(
         {"_id": 0}
     ).sort("sent_at", -1).limit(50).to_list(50)
     return emails
+
+
+
+# ==================== GDPR COMPLIANCE ENDPOINTS ====================
+
+@api_router.get("/workers/{worker_id}/gdpr-export")
+async def gdpr_export_worker_data(
+    worker_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """
+    GDPR: Jog az adatokhoz (Right to Access)
+    Dolgozó összes adatának exportálása JSON formátumban
+    """
+    # Jogosultság ellenőrzés
+    query = {"id": worker_id}
+    if user["role"] != "admin":
+        query["owner_id"] = user["id"]
+    
+    worker = await db.workers.find_one(query, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Dolgozó nem található vagy nincs jogosultságod")
+    
+    # Összes kapcsolódó adat gyűjtése
+    export_data = {
+        "worker": worker,
+        "tags": [],
+        "projects": [],
+        "email_history": [],
+        "audit_logs": [],
+        "created_by": {},
+        "export_date": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Tagek
+    if worker.get("tag_ids"):
+        tags = await db.tags.find({"id": {"$in": worker["tag_ids"]}}, {"_id": 0}).to_list(100)
+        export_data["tags"] = tags
+    
+    # Projektek és státuszok
+    project_workers = await db.project_workers.find(
+        {"worker_id": worker_id},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    for pw in project_workers:
+        project = await db.projects.find_one({"id": pw["project_id"]}, {"_id": 0})
+        status = await db.statuses.find_one({"id": pw.get("status_id")}, {"_id": 0})
+        
+        export_data["projects"].append({
+            "project": project,
+            "status": status,
+            "added_at": pw.get("added_at"),
+            "notes": pw.get("notes", "")
+        })
+    
+    # Email történet
+    emails = await db.email_logs.find(
+        {"worker_id": worker_id},
+        {"_id": 0}
+    ).to_list(1000)
+    export_data["email_history"] = emails
+    
+    # Audit log (ha van)
+    audit_logs = await db.audit_logs.find(
+        {"resource_id": worker_id},
+        {"_id": 0}
+    ).sort("timestamp", -1).to_list(1000)
+    export_data["audit_logs"] = audit_logs
+    
+    # Létrehozó user
+    owner = await db.users.find_one({"id": worker["owner_id"]}, {"_id": 0, "password": 0})
+    export_data["created_by"] = owner
+    
+    # Audit log
+    await audit_logger.log(
+        user_id=user["id"],
+        action="gdpr_export",
+        resource_type="worker",
+        resource_id=worker_id,
+        details={"exported_by": user["email"]}
+    )
+    
+    return export_data
+
+
+@api_router.delete("/workers/{worker_id}/gdpr-delete")
+async def gdpr_delete_worker_data(
+    worker_id: str,
+    reason: str,
+    user: dict = Depends(get_current_user)
+):
+    """
+    GDPR: Jog a törléshez (Right to Erasure)
+    Dolgozó TELJES törlése minden kapcsolódó adattal
+    
+    FIGYELEM: Ez VÉGLEGES törlés, nem visszaállítható!
+    """
+    # Csak admin törölhet GDPR alapján
+    if user["role"] != "admin":
+        raise HTTPException(
+            status_code=403, 
+            detail="GDPR törlést csak admin hajthat végre biztonsági okokból"
+        )
+    
+    worker = await db.workers.find_one({"id": worker_id}, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Dolgozó nem található")
+    
+    # Audit log a törlés előtt
+    await audit_logger.log(
+        user_id=user["id"],
+        action="gdpr_delete",
+        resource_type="worker",
+        resource_id=worker_id,
+        details={
+            "reason": reason,
+            "worker_name": worker.get("name"),
+            "worker_email": worker.get("email"),
+            "worker_phone": worker.get("phone"),
+            "deleted_by": user["email"]
+        }
+    )
+    
+    # 1. Dolgozó törlése
+    await db.workers.delete_one({"id": worker_id})
+    
+    # 2. Projekt kapcsolatok törlése
+    await db.project_workers.delete_many({"worker_id": worker_id})
+    
+    # 3. Email log törlése
+    await db.email_logs.delete_many({"worker_id": worker_id})
+    
+    # 4. Email queue törlése
+    await db.email_queue.delete_many({"worker_id": worker_id})
+    
+    # 5. Unsubscribe tokenek törlése
+    await db.unsubscribe_tokens.delete_many({"worker_id": worker_id})
+    
+    # 6. Worker logs törlése
+    await db.worker_logs.delete_many({"worker_id": worker_id})
+    
+    return {
+        "success": True,
+        "message": f"Dolgozó és minden kapcsolódó adata véglegesen törölve (GDPR)",
+        "deleted_records": {
+            "worker": 1,
+            "reason": reason
+        }
+    }
+
+
+@api_router.post("/workers/{worker_id}/consent")
+async def update_worker_consent(
+    worker_id: str,
+    consent_given: bool,
+    user: dict = Depends(get_current_user)
+):
+    """
+    GDPR: Beleegyezés frissítése
+    """
+    query = {"id": worker_id}
+    if user["role"] != "admin":
+        query["owner_id"] = user["id"]
+    
+    worker = await db.workers.find_one(query, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Dolgozó nem található")
+    
+    update_data = {
+        "consent_given": consent_given,
+        "consent_date": datetime.now(timezone.utc).isoformat() if consent_given else None
+    }
+    
+    # Adatmegőrzés lejárata: 2 év a beleegyezéstől
+    if consent_given:
+        retention_date = datetime.now(timezone.utc) + timedelta(days=730)  # 2 év
+        update_data["data_retention_until"] = retention_date.isoformat()
+    
+    await db.workers.update_one({"id": worker_id}, {"$set": update_data})
+    
+    await audit_logger.log(
+        user_id=user["id"],
+        action="consent_updated",
+        resource_type="worker",
+        resource_id=worker_id,
+        details={"consent_given": consent_given}
+    )
+    
+    return {
+        "success": True,
+        "consent_given": consent_given,
+        "data_retention_until": update_data.get("data_retention_until")
+    }
+
+
+@api_router.get("/gdpr/retention-check")
+async def gdpr_retention_check(
+    user: dict = Depends(require_admin)
+):
+    """
+    GDPR: Adatmegőrzés lejárati ellenőrzés
+    Admin látja mely dolgozók adatait kell törölni
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Dolgozók akiknek lejárt az adatmegőrzési ideje
+    expired_workers = await db.workers.find(
+        {
+            "data_retention_until": {"$lt": now},
+            "consent_given": False
+        },
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "data_retention_until": 1, "owner_id": 1}
+    ).to_list(1000)
+    
+    # Gazdátlan dolgozók (owner törlődött)
+    orphaned_workers = []
+    all_user_ids = [u["id"] async for u in db.users.find({}, {"id": 1})]
+    orphaned_workers = await db.workers.find(
+        {"owner_id": {"$nin": all_user_ids}},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "owner_id": 1}
+    ).to_list(1000)
+    
+    return {
+        "expired_retention_workers": expired_workers,
+        "orphaned_workers": orphaned_workers,
+        "total_to_review": len(expired_workers) + len(orphaned_workers)
+    }
