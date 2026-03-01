@@ -33,6 +33,12 @@ export default function LoginPage() {
     const success = await login(email, password);
     setLoading(false);
     if (success) {
+      // Save email if "remember me" is checked
+      if (rememberMe) {
+        localStorage.setItem("rememberedEmail", email);
+      } else {
+        localStorage.removeItem("rememberedEmail");
+      }
       navigate("/workers");
     }
   };
