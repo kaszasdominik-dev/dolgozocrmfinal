@@ -689,98 +689,89 @@ def normalize_text_for_search(text: str) -> str:
         return ""
     return remove_accents(text.lower())
 
-# ==================== AI-ALAPÚ GENDER DETECTION OPENAI GPT-4O-MINI-VAL ====================
-# TELJESEN INGYENES (FREE TIER), KORLÁTLAN, VALÓDI AI!
+# ==================== AI-ALAPÚ GENDER DETECTION GROQ LLAMA-VAL ====================
+# VALÓBAN INGYENES API! (Groq Cloud - llama3-8b-8192)
 
-import openai
+from groq import Groq
 
-# OpenAI Free Tier API (gpt-4o-mini ingyenes!)
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', 'sk-proj-demo')  # Free tier!
+# Groq API - TELJESEN INGYENES!
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 
 def detect_gender_from_name(full_name: str) -> Optional[str]:
     """
-    AI-alapú gender detection OpenAI GPT-4o-mini-val
-    TELJESEN INGYENES (FREE TIER), KORLÁTLAN, VALÓDI AI!
+    VALÓDI AI-alapú gender detection Groq Llama3 modellel
+    100% INGYENES, KORLÁTLAN használat!
     
-    Returns: "férfi", "nő", or None if cannot determine
+    Returns: "férfi", "nő", or None
     
-    Használja az OpenAI GPT-4o-mini modelt (ingyenes tier)
-    Sokkal pontosabb mint a szabály-alapú megoldás!
+    Groq Cloud API: Ingyenes, gyors LLM inference
+    Model: llama3-8b-8192 (teljesen ingyenes!)
     """
     if not full_name or len(full_name.strip()) < 2:
         return None
     
+    # Ha nincs API key, fallback
+    if not GROQ_API_KEY:
+        logger.warning("GROQ_API_KEY nincs beállítva - fallback heurisztikára")
+        return _fallback_gender_detection(full_name)
+    
     try:
-        # OpenAI client inicializálás
-        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        # Groq client inicializálás
+        client = Groq(api_key=GROQ_API_KEY)
         
-        # AI prompt magyar nevekhez optimalizálva
-        prompt = f"""
-Határozd meg a következő magyar név nemét (gender):
+        # AI prompt - rövid és egyértelmű
+        prompt = f"""Név: "{full_name}"
 
-Név: "{full_name}"
+Magyar név neme? Válasz CSAK: férfi VAGY nő"""
 
-Válaszolj CSAK egy szóval:
-- "férfi" ha férfi név
-- "nő" ha női név  
-- "ismeretlen" ha nem tudod meghatározni
-
-Magyar nevek szabályai:
-- "né" utótag = női (pl. "Kiss Jánosné")
-- Magyar sorrend: Vezetéknév Keresztnév (pl. "Nagy Anna")
-- Női nevek gyakran -a végződésűek
-- Figyelj a keresztnevekre (második szó általában)
-
-Válasz:"""
-
-        # GPT-4o-mini API hívás (INGYENES!)
+        # Groq Llama3 API hívás (INGYENES!)
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Ingyenes model!
+            model="llama3-8b-8192",  # Ingyenes, gyors model!
             messages=[
-                {"role": "system", "content": "Te egy magyar név gender detection szakértő vagy. Csak 'férfi', 'nő' vagy 'ismeretlen' szavakkal válaszolj."},
+                {"role": "system", "content": "Te egy magyar név gender detector vagy. Csak 'férfi' vagy 'nő' szóval válaszolj."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=10,
-            temperature=0.1  # Konzisztens eredményekért
+            max_tokens=5,
+            temperature=0.0  # Determinisztikus
         )
         
         # Válasz feldolgozása
         result = response.choices[0].message.content.strip().lower()
         
-        if "férfi" in result:
+        if "férfi" in result or "ferfi" in result:
             return "férfi"
-        elif "nő" in result:
+        elif "nő" in result or "no" in result:
             return "nő"
         else:
-            return None
+            return _fallback_gender_detection(full_name)
             
     except Exception as e:
-        # Ha az AI nem elérhető, fallback a gyors heurisztikára
-        logging.warning(f"AI gender detection failed for '{full_name}': {e}")
+        logger.warning(f"Groq AI gender detection hiba '{full_name}': {e}")
+        return _fallback_gender_detection(full_name)
+
+def _fallback_gender_detection(full_name: str) -> Optional[str]:
+    """Fallback heurisztika ha az AI nem elérhető"""
+    name_lower = full_name.lower().strip()
+    
+    # "né" utótag -> női
+    if " né " in name_lower or name_lower.endswith("né"):
+        return "nő"
+    
+    # Keresztnév vizsgálata (második szó magyar sorrendben)
+    words = name_lower.split()
+    if len(words) >= 2:
+        last_word = words[-1]
         
-        # Egyszerű fallback logika
-        name_lower = full_name.lower().strip()
+        # Női végződések
+        if last_word.endswith('a') and len(last_word) >= 3:
+            if last_word not in ['béla', 'bela', 'gyula', 'attila']:
+                return "nő"
         
-        # "né" utótag -> női
-        if " né " in name_lower or name_lower.endswith("né"):
-            return "nő"
-        
-        # Utolsó szó (keresztnév) vizsgálata
-        words = name_lower.split()
-        if len(words) >= 2:
-            last_word = words[-1]  # Keresztnév (magyar sorrendben)
-            
-            # Női végződések
-            if last_word.endswith('a') and len(last_word) >= 3:
-                # Kivéve férfi nevek: béla, gyula, attila
-                if last_word not in ['béla', 'bela', 'gyula', 'attila']:
-                    return "nő"
-            
-            # Férfi végződések (konzonáns)
-            if len(last_word) >= 3 and last_word[-1] in 'bcdfghjklmnpqrstvwxyz':
-                return "férfi"
-        
-        return None
+        # Férfi végződések
+        if len(last_word) >= 3 and last_word[-1] in 'bcdfghjklmnpqrstvwxyz':
+            return "férfi"
+    
+    return None
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
