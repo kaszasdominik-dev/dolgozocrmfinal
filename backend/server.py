@@ -1347,13 +1347,18 @@ async def get_workers(
             query["created_at"] = date_query
     
     if search:
+        # ÚJ: Rugalmas, ékezet-mentes keresés
+        # Eltávolítjuk az ékezeteket a keresési kifejezésből
+        search_normalized = normalize_text_for_search(search)
+        search_regex = create_flexible_search_regex(search)
+        
         query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
+            {"name": {"$regex": search_regex, "$options": "i"}},
             {"phone": {"$regex": search, "$options": "i"}},
             {"email": {"$regex": search, "$options": "i"}},
-            {"address": {"$regex": search, "$options": "i"}},
-            {"experience": {"$regex": search, "$options": "i"}},
-            {"position": {"$regex": search, "$options": "i"}}
+            {"address": {"$regex": search_regex, "$options": "i"}},
+            {"experience": {"$regex": search_regex, "$options": "i"}},
+            {"position": {"$regex": search_regex, "$options": "i"}}
         ]
     
     # Projekt státusz szűrő - előre lekérjük a megfelelő worker_id-kat
