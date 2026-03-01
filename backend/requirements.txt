@@ -132,3 +132,4 @@ yarl==1.22.0
 zipp==3.23.0
 openai==1.99.9
 groq
+PyPDF2
