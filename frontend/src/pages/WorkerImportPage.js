@@ -138,8 +138,8 @@ export default function WorkerImportPage() {
   };
 
   const handleImport = async () => {
-    if (!columnMapping.name && columnMapping.name !== 0) {
-      toast.error("Név oszlop kiválasztása kötelező");
+    if (!file) {
+      toast.error("Válassz ki egy fájlt");
       return;
     }
     if (!selectedWorkerType) {
@@ -161,17 +161,76 @@ export default function WorkerImportPage() {
         apply_same_to_all: true
       }));
       
+      // Háttér-feldolgozás indítása
       const res = await axios.post(`${API}/workers/import`, formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
       
-      setImportResult(res.data);
-      setStep(4);
-      toast.success(res.data.message);
+      // Job ID mentése és polling indítása
+      const newJobId = res.data.job_id;
+      setJobId(newJobId);
+      setStep(4); // Eredmény oldalra lépés
+      
+      toast.success("Import elindítva háttérben! 🤖 AI gender detection folyamatban...");
+      
+      // Polling indítása
+      startPolling(newJobId);
+      
     } catch (e) {
       toast.error(e.response?.data?.detail || "Hiba az importálás során");
-    } finally {
       setImporting(false);
+    }
+  };
+  
+  const startPolling = (currentJobId) => {
+    // Azonnali első lekérés
+    pollJobStatus(currentJobId);
+    
+    // Majd 2 másodpercenként
+    pollingIntervalRef.current = setInterval(() => {
+      pollJobStatus(currentJobId);
+    }, 2000);
+  };
+  
+  const pollJobStatus = async (currentJobId) => {
+    try {
+      const res = await axios.get(`${API}/import-jobs/${currentJobId}`);
+      const job = res.data;
+      
+      setJobStatus(job);
+      
+      // Progress számítás
+      if (job.total > 0) {
+        const percent = Math.round((job.processed / job.total) * 100);
+        setProgressPercent(percent);
+      }
+      
+      // Ha kész vagy hiba, állítsuk le a polling-ot
+      if (job.status === "completed" || job.status === "failed") {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        
+        setImporting(false);
+        
+        if (job.status === "completed") {
+          setImportResult({
+            message: `${job.imported} dolgozó sikeresen importálva`,
+            imported: job.imported,
+            skipped: job.skipped,
+            errors: job.errors || []
+          });
+          
+          // Értesítés már a backend küldte, de toast is
+          toast.success(`✅ ${job.imported} dolgozó importálva és nemük AI-val beazonosítva!`);
+        } else {
+          toast.error(`❌ Import hiba: ${job.error || 'Ismeretlen hiba'}`);
+        }
+      }
+      
+    } catch (e) {
+      console.error("Polling error:", e);
     }
   };
 
