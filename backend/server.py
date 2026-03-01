@@ -726,7 +726,7 @@ Magyar név neme? Válasz CSAK: férfi VAGY nő"""
 
         # Groq Llama3 API hívás (INGYENES!)
         response = client.chat.completions.create(
-            model="llama3-8b-8192",  # Ingyenes, gyors model!
+            model="llama-3.3-70b-versatile",  # Újabb, aktív model!
             messages=[
                 {"role": "system", "content": "Te egy magyar név gender detector vagy. Csak 'férfi' vagy 'nő' szóval válaszolj."},
                 {"role": "user", "content": prompt}
