@@ -403,7 +403,26 @@ export default function WorkerFormPage() {
       }
       navigate("/workers");
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Hiba");
+      // Pydantic validation error kezelés
+      const errorData = e.response?.data;
+      let errorMessage = "Hiba történt";
+      
+      if (errorData?.detail) {
+        if (typeof errorData.detail === 'string') {
+          errorMessage = errorData.detail;
+        } else if (Array.isArray(errorData.detail)) {
+          // Pydantic validation errors
+          errorMessage = errorData.detail.map(err => {
+            const field = err.loc?.join('.') || 'mező';
+            return `${field}: ${err.msg}`;
+          }).join(', ');
+        } else if (typeof errorData.detail === 'object') {
+          errorMessage = errorData.detail.msg || JSON.stringify(errorData.detail);
+        }
+      }
+      
+      console.error("Worker create error:", errorData);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
