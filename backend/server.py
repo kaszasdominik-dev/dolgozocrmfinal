@@ -4045,18 +4045,42 @@ async def parse_cv_with_ai(
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    """PDF szöveg kinyerése"""
-    from PyPDF2 import PdfReader
+    """PDF szöveg kinyerése - több módszerrel próbálkozik"""
     import io
     
-    pdf_file = io.BytesIO(pdf_bytes)
-    reader = PdfReader(pdf_file)
-    
     text = ""
-    for page in reader.pages:
-        text += page.extract_text() or ""
     
-    return text.strip()
+    # 1. Először pdfplumber-rel próbáljuk (jobb minőség)
+    try:
+        import pdfplumber
+        pdf_file = io.BytesIO(pdf_bytes)
+        with pdfplumber.open(pdf_file) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+        if text.strip():
+            return text.strip()
+    except Exception as e:
+        logger.warning(f"pdfplumber failed: {e}")
+    
+    # 2. Ha nem sikerült, PyPDF2-vel próbáljuk
+    try:
+        from PyPDF2 import PdfReader
+        pdf_file = io.BytesIO(pdf_bytes)
+        reader = PdfReader(pdf_file, strict=False)
+        
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + "\n"
+        if text.strip():
+            return text.strip()
+    except Exception as e:
+        logger.warning(f"PyPDF2 failed: {e}")
+    
+    # 3. Ha minden más nem sikerült
+    raise ValueError("Nem sikerült szöveget kinyerni a PDF-ből. Próbálj meg egy másik formátumot (DOCX, TXT) vagy mentsd újra a PDF-et.")
 
 
 def extract_text_from_docx(docx_bytes: bytes) -> str:
