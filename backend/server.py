@@ -4131,6 +4131,7 @@ async def extract_worker_data_with_ai(text: str) -> dict:
     Kivonja: név, telefon, email, cím, tapasztalat, pozíció, készségek
     """
     from groq import Groq
+    import re
     
     if not GROQ_API_KEY:
         raise HTTPException(status_code=500, detail="GROQ_API_KEY nincs beállítva")
@@ -4144,27 +4145,16 @@ Elemezd az alábbi CV/önéletrajz szöveget és vond ki a következő adatokat 
 Ha valamit nem találsz, használj null értéket.
 
 Szöveg:
-{text[:2000]}  # Max 2000 karakter az AI-nak
+{text[:2000]}
 
-Válasz JSON formátuma:
-{{
-  "name": "Teljes név",
-  "phone": "Telefonszám (magyar formátum: +36 vagy 06)",
-  "email": "email@example.com",
-  "address": "Teljes lakcím (város, utca)",
-  "position": "Legutóbbi pozíció/szakma",
-  "experience": "Tapasztalat években (szám) vagy leírás",
-  "skills": ["készség1", "készség2", "készség3"],
-  "notes": "További releváns infók"
-}}
-
-FONTOS: Csak JSON-t adj vissza, semmi mást!
+Válasz CSAK ez a JSON legyen, semmi más szöveg előtte vagy utána:
+{{"name": "Teljes név", "phone": "Telefonszám", "email": "email@example.com", "address": "Lakcím", "position": "Pozíció", "experience": "Tapasztalat", "skills": ["készség1", "készség2"], "notes": "Egyéb infók"}}
 """
 
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": "Te egy CV/önéletrajz elemző szakértő vagy. Csak JSON formátumban válaszolj."},
+                {"role": "system", "content": "Te egy CV elemző vagy. CSAK tiszta JSON-t adj vissza, semmilyen magyarázatot vagy extra szöveget ne írj!"},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=500,
@@ -4173,15 +4163,37 @@ FONTOS: Csak JSON-t adj vissza, semmi mást!
         
         # Válasz parsing
         result_text = response.choices[0].message.content.strip()
+        logger.info(f"AI raw response: {result_text[:500]}")
         
-        # JSON kinyerése (néha markdown kód blokkban van)
+        # JSON kinyerése többféle módon
+        extracted = None
+        
+        # 1. Próba: markdown kód blokk
         if "```json" in result_text:
             result_text = result_text.split("```json")[1].split("```")[0].strip()
         elif "```" in result_text:
             result_text = result_text.split("```")[1].split("```")[0].strip()
         
-        # JSON parse
-        extracted = json.loads(result_text)
+        # 2. Próba: találjuk meg a JSON objektumot regex-szel
+        json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', result_text, re.DOTALL)
+        if json_match:
+            result_text = json_match.group(0)
+        
+        # 3. Próba: parse
+        try:
+            extracted = json.loads(result_text)
+        except json.JSONDecodeError:
+            # Ha még mindig nem megy, próbáljuk a sorvégeket javítani
+            result_text = result_text.replace('\n', ' ').replace('\r', '')
+            # Keressük meg az első { és utolsó } között
+            start = result_text.find('{')
+            end = result_text.rfind('}')
+            if start != -1 and end != -1:
+                result_text = result_text[start:end+1]
+                extracted = json.loads(result_text)
+        
+        if not extracted:
+            raise ValueError("Nem sikerült JSON-t kinyerni")
         
         # AI Gender Detection a névre
         if extracted.get("name"):
