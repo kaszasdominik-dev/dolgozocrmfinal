@@ -1,10 +1,12 @@
-# Environment files - SOHA NE COMMITÁLD!
+# Environment files - SOHA NE COMMITALD!
 .env
 .env.local
 .env.development
 .env.production
 backend/.env
 frontend/.env
+*.env
+*.env.*
 
 # Python
 __pycache__/
@@ -40,33 +42,9 @@ logs/
 # Database
 *.db
 *.sqlite
-frontend/node_modules/.cache/default-development/2.pack
-frontend/node_modules/.cache/default-development/1.pack
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
 
 # Emergent platform files
 .emergent/
+frontend/node_modules/.cache/default-development/2.pack
 frontend/node_modules/.cache/default-development/0.pack
+frontend/node_modules/.cache/default-development/1.pack
