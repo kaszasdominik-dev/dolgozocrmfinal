@@ -289,7 +289,7 @@ export default function DashboardLayout() {
                       </NavLink>
                     </TooltipTrigger>
                     <TooltipContent side="right" className="font-medium">
-                      Excel Import
+                      Excel/CV Import
                     </TooltipContent>
                   </Tooltip>
                 ) : (
@@ -306,7 +306,7 @@ export default function DashboardLayout() {
                     data-testid="nav-import"
                   >
                     <FileSpreadsheet className="w-5 h-5" />
-                    Excel Import
+                    Excel/CV Import
                     <ChevronRight className="w-4 h-4 ml-auto opacity-50" />
                   </NavLink>
                 )}
