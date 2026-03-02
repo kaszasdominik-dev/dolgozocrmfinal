@@ -69,3 +69,4 @@ frontend/node_modules/.cache/default-development/1.pack
 
 # Emergent platform files
 .emergent/
+frontend/node_modules/.cache/default-development/0.pack
