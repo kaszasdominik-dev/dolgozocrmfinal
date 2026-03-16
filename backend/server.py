@@ -7191,7 +7191,76 @@ async def gdpr_export_worker_data(
     GDPR: Jog az adatokhoz (Right to Access)
     Dolgozó összes adatának exportálása JSON formátumban
     """
-
+    # Jogosultság ellenőrzés
+    query = {"id": worker_id}
+    if user["role"] != "admin":
+        query["owner_id"] = user["id"]
+    
+    worker = await db.workers.find_one(query, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Dolgozó nem található vagy nincs jogosultságod")
+    
+    # Összes kapcsolódó adat gyűjtése
+    export_data = {
+        "worker": worker,
+        "tags": [],
+        "projects": [],
+        "email_history": [],
+        "audit_logs": [],
+        "created_by": {},
+        "export_date": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Tagek
+    if worker.get("tag_ids"):
+        tags = await db.tags.find({"id": {"$in": worker["tag_ids"]}}, {"_id": 0}).to_list(100)
+        export_data["tags"] = tags
+    
+    # Projektek és státuszok
+    project_workers = await db.project_workers.find(
+        {"worker_id": worker_id},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    for pw in project_workers:
+        project = await db.projects.find_one({"id": pw["project_id"]}, {"_id": 0})
+        pw_status = await db.statuses.find_one({"id": pw.get("status_id")}, {"_id": 0})
+        
+        export_data["projects"].append({
+            "project": project,
+            "status": pw_status,
+            "added_at": pw.get("added_at"),
+            "notes": pw.get("notes", "")
+        })
+    
+    # Email történet
+    emails = await db.email_logs.find(
+        {"worker_id": worker_id},
+        {"_id": 0}
+    ).to_list(1000)
+    export_data["email_history"] = emails
+    
+    # Audit log (ha van)
+    audit_logs = await db.audit_logs.find(
+        {"resource_id": worker_id},
+        {"_id": 0}
+    ).sort("timestamp", -1).to_list(1000)
+    export_data["audit_logs"] = audit_logs
+    
+    # Létrehozó user
+    owner = await db.users.find_one({"id": worker["owner_id"]}, {"_id": 0, "password": 0})
+    export_data["created_by"] = owner
+    
+    # Audit log
+    await audit_logger.log(
+        user_id=user["id"],
+        action="gdpr_export",
+        resource_type="worker",
+        resource_id=worker_id,
+        details={"exported_by": user["email"]}
+    )
+    
+    return export_data
 
 
 # ==================== 2 ÉVES DOLGOZÓK KEZELÉSE (GDPR) ====================
@@ -7395,77 +7464,6 @@ async def check_old_workers_notification():
         
     except Exception as e:
         logger.error(f"❌ GDPR értesítés hiba: {e}", exc_info=True)
-
-    # Jogosultság ellenőrzés
-    query = {"id": worker_id}
-    if user["role"] != "admin":
-        query["owner_id"] = user["id"]
-    
-    worker = await db.workers.find_one(query, {"_id": 0})
-    if not worker:
-        raise HTTPException(status_code=404, detail="Dolgozó nem található vagy nincs jogosultságod")
-    
-    # Összes kapcsolódó adat gyűjtése
-    export_data = {
-        "worker": worker,
-        "tags": [],
-        "projects": [],
-        "email_history": [],
-        "audit_logs": [],
-        "created_by": {},
-        "export_date": datetime.now(timezone.utc).isoformat()
-    }
-    
-    # Tagek
-    if worker.get("tag_ids"):
-        tags = await db.tags.find({"id": {"$in": worker["tag_ids"]}}, {"_id": 0}).to_list(100)
-        export_data["tags"] = tags
-    
-    # Projektek és státuszok
-    project_workers = await db.project_workers.find(
-        {"worker_id": worker_id},
-        {"_id": 0}
-    ).to_list(1000)
-    
-    for pw in project_workers:
-        project = await db.projects.find_one({"id": pw["project_id"]}, {"_id": 0})
-        status = await db.statuses.find_one({"id": pw.get("status_id")}, {"_id": 0})
-        
-        export_data["projects"].append({
-            "project": project,
-            "status": status,
-            "added_at": pw.get("added_at"),
-            "notes": pw.get("notes", "")
-        })
-    
-    # Email történet
-    emails = await db.email_logs.find(
-        {"worker_id": worker_id},
-        {"_id": 0}
-    ).to_list(1000)
-    export_data["email_history"] = emails
-    
-    # Audit log (ha van)
-    audit_logs = await db.audit_logs.find(
-        {"resource_id": worker_id},
-        {"_id": 0}
-    ).sort("timestamp", -1).to_list(1000)
-    export_data["audit_logs"] = audit_logs
-    
-    # Létrehozó user
-    owner = await db.users.find_one({"id": worker["owner_id"]}, {"_id": 0, "password": 0})
-    export_data["created_by"] = owner
-    
-    # Audit log
-    await audit_logger.log(
-        user_id=user["id"],
-        action="gdpr_export",
-        resource_type="worker",
-        resource_id=worker_id,
-        details={"exported_by": user["email"]}
-    )
-    
-    return export_data
 
 
 @api_router.delete("/workers/{worker_id}/gdpr-delete")
