@@ -10,7 +10,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import logging
 
-from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request as GoogleRequest
 from googleapiclient.discovery import build
@@ -41,44 +40,31 @@ def get_google_client_config():
         return None
     
     return {
-        "web": {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token"
-        }
+        "client_id": client_id,
+        "client_secret": client_secret
     }
 
 
-def create_oauth_flow(redirect_uri: str) -> Optional[Flow]:
-    """Create OAuth flow for Gmail authorization"""
-    client_config = get_google_client_config()
-    if not client_config:
-        return None
-    
-    flow = Flow.from_client_config(
-        client_config,
-        scopes=GMAIL_SCOPES,
-        redirect_uri=redirect_uri
-    )
-    # Disable PKCE to avoid code_verifier issues
-    flow.code_verifier = None
-    return flow
-
-
 def get_authorization_url(redirect_uri: str, state: str) -> Optional[str]:
-    """Get Gmail authorization URL"""
-    flow = create_oauth_flow(redirect_uri)
-    if not flow:
+    """Get Gmail authorization URL - manual generation without PKCE"""
+    client_id = os.environ.get('GOOGLE_CLIENT_ID')
+    if not client_id:
         return None
     
-    # Don't use PKCE (code_challenge) - simpler for server-side apps
-    auth_url, _ = flow.authorization_url(
-        access_type='offline',
-        prompt='consent',
-        state=state,
-        include_granted_scopes='true'
-    )
+    # Build auth URL manually WITHOUT PKCE
+    import urllib.parse
+    
+    params = {
+        'client_id': client_id,
+        'redirect_uri': redirect_uri,
+        'response_type': 'code',
+        'scope': ' '.join(GMAIL_SCOPES),
+        'access_type': 'offline',
+        'prompt': 'consent',
+        'state': state
+    }
+    
+    auth_url = 'https://accounts.google.com/o/oauth2/v2/auth?' + urllib.parse.urlencode(params)
     return auth_url
 
 
