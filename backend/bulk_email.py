@@ -83,8 +83,11 @@ async def exchange_code_for_tokens(code: str, redirect_uri: str) -> Optional[Dic
     """Exchange authorization code for tokens"""
     import warnings
     
+    logger.info(f"Exchanging code for tokens with redirect_uri: {redirect_uri}")
+    
     flow = create_oauth_flow(redirect_uri)
     if not flow:
+        logger.error("OAuth flow creation failed - missing client config")
         return None
     
     try:
@@ -93,10 +96,13 @@ async def exchange_code_for_tokens(code: str, redirect_uri: str) -> Optional[Dic
             flow.fetch_token(code=code)
         
         creds = flow.credentials
+        logger.info(f"Token fetched successfully, has refresh_token: {creds.refresh_token is not None}")
         
         # Get user info
         service = build('oauth2', 'v2', credentials=creds)
         user_info = service.userinfo().get().execute()
+        
+        logger.info(f"User info retrieved: {user_info.get('email')}")
         
         return {
             "access_token": creds.token,
@@ -110,6 +116,8 @@ async def exchange_code_for_tokens(code: str, redirect_uri: str) -> Optional[Dic
         }
     except Exception as e:
         logger.error(f"Error exchanging code for tokens: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return None
 
 
