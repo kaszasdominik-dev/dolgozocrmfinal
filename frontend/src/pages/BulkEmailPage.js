@@ -395,10 +395,12 @@ export default function BulkEmailPage() {
   };
 
   const handleSelectEmailTemplate = (templateId) => {
-    setCampaignForm(prev => ({ ...prev, email_template_id: templateId }));
+    // Handle "new" as empty/no template
+    const actualTemplateId = templateId === "new" ? "" : templateId;
+    setCampaignForm(prev => ({ ...prev, email_template_id: actualTemplateId }));
     
-    if (templateId) {
-      const template = emailTemplates.find(t => t.id === templateId);
+    if (actualTemplateId) {
+      const template = emailTemplates.find(t => t.id === actualTemplateId);
       if (template) {
         setCampaignForm(prev => ({
           ...prev,
@@ -406,6 +408,13 @@ export default function BulkEmailPage() {
           body: template.body
         }));
       }
+    } else {
+      // Clear subject and body when "new email" is selected
+      setCampaignForm(prev => ({
+        ...prev,
+        subject: "",
+        body: ""
+      }));
     }
   };
 
@@ -1072,14 +1081,14 @@ export default function BulkEmailPage() {
               <div>
                 <Label>Email sablon (opcionális)</Label>
                 <Select
-                  value={campaignForm.email_template_id}
+                  value={campaignForm.email_template_id || "new"}
                   onValueChange={handleSelectEmailTemplate}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Válassz sablont vagy írj új emailt..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Új email írása</SelectItem>
+                    <SelectItem value="new">Új email írása</SelectItem>
                     {emailTemplates.map(t => (
                       <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                     ))}
