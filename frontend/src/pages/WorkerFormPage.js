@@ -75,6 +75,10 @@ export default function WorkerFormPage() {
   const [cvFile, setCvFile] = useState(null);
   const [cvParsing, setCvParsing] = useState(false);
   const fileInputRef = useRef(null);
+  
+  // Duplikáció kezelés state
+  const [duplicateDialog, setDuplicateDialog] = useState(false);
+  const [duplicateData, setDuplicateData] = useState(null); // {existing_worker, new_worker_data}
 
   useEffect(() => {
     fetchInitialData();
@@ -331,8 +335,8 @@ export default function WorkerFormPage() {
     }
   };
   
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (e, forceCreate = false) => {
+    if (e) e.preventDefault();
     
     if (formData.name.length < 2) {
       toast.error("Név minimum 2 karakter");
@@ -349,7 +353,7 @@ export default function WorkerFormPage() {
 
     setLoading(true);
     try {
-      const payload = { ...formData };
+      const payload = { ...formData, force_create: forceCreate };
       
       // Project assignment
       if (!isEdit && selectedProject && addToProject === "direct" && selectedStatus) {
@@ -403,6 +407,14 @@ export default function WorkerFormPage() {
       }
       navigate("/workers");
     } catch (e) {
+      // Duplikáció kezelés (409-es hiba)
+      if (e.response?.status === 409 && e.response?.data?.detail?.type === "duplicate") {
+        setDuplicateData(e.response.data.detail);
+        setDuplicateDialog(true);
+        setLoading(false);
+        return;
+      }
+      
       // Pydantic validation error kezelés
       const errorData = e.response?.data;
       let errorMessage = "Hiba történt";
@@ -417,12 +429,41 @@ export default function WorkerFormPage() {
             return `${field}: ${err.msg}`;
           }).join(', ');
         } else if (typeof errorData.detail === 'object') {
-          errorMessage = errorData.detail.msg || JSON.stringify(errorData.detail);
+          errorMessage = errorData.detail.message || errorData.detail.msg || JSON.stringify(errorData.detail);
         }
       }
       
       console.error("Worker create error:", errorData);
       toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Duplikáció: Új létrehozása mindenképp
+  const handleForceCreate = () => {
+    setDuplicateDialog(false);
+    handleSubmit(null, true);
+  };
+  
+  // Duplikáció: Régi frissítése az új adatokkal
+  const handleUpdateExisting = async () => {
+    if (!duplicateData?.existing_worker?.id) return;
+    
+    setLoading(true);
+    try {
+      const updatePayload = {
+        ...duplicateData.new_worker_data,
+        // Megtartjuk az eredeti worker_type_id-t ha az új üres
+        worker_type_id: duplicateData.new_worker_data.worker_type_id || duplicateData.existing_worker.worker_type_id
+      };
+      
+      await axios.put(`${API}/workers/${duplicateData.existing_worker.id}`, updatePayload);
+      toast.success("Meglévő dolgozó frissítve!");
+      setDuplicateDialog(false);
+      navigate("/workers");
+    } catch (e) {
+      toast.error("Hiba a frissítésnél: " + (e.response?.data?.detail || ""));
     } finally {
       setLoading(false);
     }
@@ -992,6 +1033,77 @@ export default function WorkerFormPage() {
                   Elemzés AI-val
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Duplikáció kezelő Dialog */}
+      <Dialog open={duplicateDialog} onOpenChange={setDuplicateDialog}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="text-orange-500 flex items-center gap-2">
+              ⚠️ Duplikáció találat!
+            </DialogTitle>
+            <DialogDescription>
+              Már létezik hasonló dolgozó a rendszerben. Válaszd ki mit szeretnél tenni.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {duplicateData && (
+            <div className="grid grid-cols-2 gap-4">
+              {/* Meglévő dolgozó */}
+              <div className="border rounded-lg p-4 bg-red-50 dark:bg-red-950/20">
+                <h4 className="font-semibold text-red-600 mb-3">🔴 Meglévő dolgozó</h4>
+                <div className="space-y-2 text-sm">
+                  <p><strong>Név:</strong> {duplicateData.existing_worker?.name}</p>
+                  <p><strong>Telefon:</strong> {duplicateData.existing_worker?.phone || "-"}</p>
+                  <p><strong>Email:</strong> {duplicateData.existing_worker?.email || "-"}</p>
+                  <p><strong>Cím:</strong> {duplicateData.existing_worker?.address || "-"}</p>
+                  <p><strong>Pozíció:</strong> {duplicateData.existing_worker?.position || "-"}</p>
+                  <p><strong>Státusz:</strong> {duplicateData.existing_worker?.global_status || "-"}</p>
+                  <p><strong>Megjegyzés:</strong> {duplicateData.existing_worker?.notes || "-"}</p>
+                  <p className="text-muted-foreground text-xs mt-2">
+                    Felvette: {duplicateData.existing_worker?.owner_name}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Új adat */}
+              <div className="border rounded-lg p-4 bg-green-50 dark:bg-green-950/20">
+                <h4 className="font-semibold text-green-600 mb-3">🟢 Új adat (amit most adtál meg)</h4>
+                <div className="space-y-2 text-sm">
+                  <p><strong>Név:</strong> {duplicateData.new_worker_data?.name}</p>
+                  <p><strong>Telefon:</strong> {duplicateData.new_worker_data?.phone || "-"}</p>
+                  <p><strong>Email:</strong> {duplicateData.new_worker_data?.email || "-"}</p>
+                  <p><strong>Cím:</strong> {duplicateData.new_worker_data?.address || "-"}</p>
+                  <p><strong>Pozíció:</strong> {duplicateData.new_worker_data?.position || "-"}</p>
+                  <p><strong>Státusz:</strong> {duplicateData.new_worker_data?.global_status || "-"}</p>
+                  <p><strong>Megjegyzés:</strong> {duplicateData.new_worker_data?.notes || "-"}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter className="flex gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setDuplicateDialog(false)}>
+              Mégsem
+            </Button>
+            <Button 
+              variant="default"
+              onClick={handleUpdateExisting}
+              disabled={loading}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {loading ? "Frissítés..." : "🔄 Régi frissítése új adatokkal"}
+            </Button>
+            <Button 
+              variant="default"
+              onClick={handleForceCreate}
+              disabled={loading}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {loading ? "Létrehozás..." : "➕ Új létrehozása mindenképp"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -216,6 +216,8 @@ class WorkerCreate(BaseModel):
     consent_given: Optional[bool] = False  # Beleegyezés adott
     consent_date: Optional[str] = None  # Beleegyezés dátuma
     processing_basis: Optional[str] = "legitimate_interest"  # jogos_erdek, beleegyezes, szerzodes
+    # Duplikáció kezelés
+    force_create: Optional[bool] = False  # Ha True, duplikáció ellenére is létrehozza
 
 class WorkerUpdate(BaseModel):
     name: Optional[str] = None
@@ -1814,40 +1816,53 @@ async def create_worker(data: WorkerCreate, user: dict = Depends(get_current_use
     if len(data.name) < 2:
         raise HTTPException(status_code=400, detail="A név minimum 2 karakter legyen")
     
-    # DUPLIKÁCIÓ ELLENŐRZÉS
-    # Admin: összes dolgozó között keres
-    # User: csak a saját dolgozói között
-    duplicate_query = {}
-    if user["role"] == "admin":
-        # Admin látja az összes duplikációt
-        duplicate_query = {
-            "$or": [
-                {"phone": data.phone} if data.phone else {"_id": None},
-                {"name": {"$regex": f"^{data.name}$", "$options": "i"}}
-            ]
-        }
-    else:
-        # User csak a saját dolgozói között
-        duplicate_query = {
-            "owner_id": user["id"],
-            "$or": [
-                {"phone": data.phone} if data.phone else {"_id": None},
-                {"name": {"$regex": f"^{data.name}$", "$options": "i"}}
-            ]
-        }
+    # Ha force_create=True, akkor nem ellenőrzünk duplikációt
+    force_create = getattr(data, 'force_create', False)
     
-    # Keresés duplikációra
-    if data.phone or data.name:
-        existing = await db.workers.find_one(duplicate_query, {"_id": 0, "id": 1, "name": 1, "phone": 1, "owner_id": 1})
-        if existing:
-            # Megkeressük a tulajdonos nevét
-            owner = await db.users.find_one({"id": existing.get("owner_id")}, {"name": 1, "email": 1})
-            owner_name = owner.get("name") or owner.get("email", "Ismeretlen") if owner else "Ismeretlen"
+    if not force_create:
+        # DUPLIKÁCIÓ ELLENŐRZÉS
+        # Admin: összes dolgozó között keres
+        # User: csak a saját dolgozói között
+        or_conditions = []
+        if data.phone and data.phone.strip():
+            or_conditions.append({"phone": data.phone})
+        if data.name:
+            or_conditions.append({"name": {"$regex": f"^{data.name}$", "$options": "i"}})
+        
+        if or_conditions:
+            if user["role"] == "admin":
+                duplicate_query = {"$or": or_conditions}
+            else:
+                duplicate_query = {"owner_id": user["id"], "$or": or_conditions}
             
-            raise HTTPException(
-                status_code=409,
-                detail=f"Duplikáció! Már létezik dolgozó ezzel a névvel vagy telefonszámmal: {existing.get('name')} ({existing.get('phone', 'nincs telefon')}) - Felvette: {owner_name}"
-            )
+            existing = await db.workers.find_one(duplicate_query, {"_id": 0})
+            if existing:
+                # Megkeressük a tulajdonos nevét
+                owner = await db.users.find_one({"id": existing.get("owner_id")}, {"name": 1, "email": 1})
+                owner_name = owner.get("name") or owner.get("email", "Ismeretlen") if owner else "Ismeretlen"
+                existing["owner_name"] = owner_name
+                
+                # Visszaadjuk a duplikáció infót speciális válaszként
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "type": "duplicate",
+                        "message": "Duplikáció találat!",
+                        "existing_worker": existing,
+                        "new_worker_data": {
+                            "name": data.name,
+                            "phone": data.phone,
+                            "email": data.email or "",
+                            "address": data.address or "",
+                            "notes": data.notes or "",
+                            "worker_type_id": data.worker_type_id,
+                            "position": data.position or "",
+                            "global_status": data.global_status or "Feldolgozatlan",
+                            "work_type": data.work_type or "",
+                            "has_car": data.has_car or ""
+                        }
+                    }
+                )
     
     # ÚJ: Automatikus nem detektálás névből (ha nincs megadva)
     detected_gender = data.gender or detect_gender_from_name(data.name)
