@@ -1814,6 +1814,41 @@ async def create_worker(data: WorkerCreate, user: dict = Depends(get_current_use
     if len(data.name) < 2:
         raise HTTPException(status_code=400, detail="A név minimum 2 karakter legyen")
     
+    # DUPLIKÁCIÓ ELLENŐRZÉS
+    # Admin: összes dolgozó között keres
+    # User: csak a saját dolgozói között
+    duplicate_query = {}
+    if user["role"] == "admin":
+        # Admin látja az összes duplikációt
+        duplicate_query = {
+            "$or": [
+                {"phone": data.phone} if data.phone else {"_id": None},
+                {"name": {"$regex": f"^{data.name}$", "$options": "i"}}
+            ]
+        }
+    else:
+        # User csak a saját dolgozói között
+        duplicate_query = {
+            "owner_id": user["id"],
+            "$or": [
+                {"phone": data.phone} if data.phone else {"_id": None},
+                {"name": {"$regex": f"^{data.name}$", "$options": "i"}}
+            ]
+        }
+    
+    # Keresés duplikációra
+    if data.phone or data.name:
+        existing = await db.workers.find_one(duplicate_query, {"_id": 0, "id": 1, "name": 1, "phone": 1, "owner_id": 1})
+        if existing:
+            # Megkeressük a tulajdonos nevét
+            owner = await db.users.find_one({"id": existing.get("owner_id")}, {"name": 1, "email": 1})
+            owner_name = owner.get("name") or owner.get("email", "Ismeretlen") if owner else "Ismeretlen"
+            
+            raise HTTPException(
+                status_code=409,
+                detail=f"Duplikáció! Már létezik dolgozó ezzel a névvel vagy telefonszámmal: {existing.get('name')} ({existing.get('phone', 'nincs telefon')}) - Felvette: {owner_name}"
+            )
+    
     # ÚJ: Automatikus nem detektálás névből (ha nincs megadva)
     detected_gender = data.gender or detect_gender_from_name(data.name)
     
