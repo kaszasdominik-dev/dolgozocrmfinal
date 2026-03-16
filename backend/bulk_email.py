@@ -61,6 +61,8 @@ def create_oauth_flow(redirect_uri: str) -> Optional[Flow]:
         scopes=GMAIL_SCOPES,
         redirect_uri=redirect_uri
     )
+    # Disable PKCE to avoid code_verifier issues
+    flow.code_verifier = None
     return flow
 
 
@@ -70,6 +72,7 @@ def get_authorization_url(redirect_uri: str, state: str) -> Optional[str]:
     if not flow:
         return None
     
+    # Don't use PKCE (code_challenge) - simpler for server-side apps
     auth_url, _ = flow.authorization_url(
         access_type='offline',
         prompt='consent',
@@ -80,23 +83,46 @@ def get_authorization_url(redirect_uri: str, state: str) -> Optional[str]:
 
 
 async def exchange_code_for_tokens(code: str, redirect_uri: str) -> Optional[Dict]:
-    """Exchange authorization code for tokens"""
-    import warnings
+    """Exchange authorization code for tokens using direct HTTP request"""
+    import requests
     
     logger.info(f"Exchanging code for tokens with redirect_uri: {redirect_uri}")
     
-    flow = create_oauth_flow(redirect_uri)
-    if not flow:
-        logger.error("OAuth flow creation failed - missing client config")
+    client_id = os.environ.get('GOOGLE_CLIENT_ID')
+    client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
+    
+    if not client_id or not client_secret:
+        logger.error("OAuth credentials not configured")
         return None
     
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            flow.fetch_token(code=code)
+        # Direct token exchange without PKCE
+        token_response = requests.post(
+            'https://oauth2.googleapis.com/token',
+            data={
+                'code': code,
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'redirect_uri': redirect_uri,
+                'grant_type': 'authorization_code'
+            }
+        )
         
-        creds = flow.credentials
-        logger.info(f"Token fetched successfully, has refresh_token: {creds.refresh_token is not None}")
+        if token_response.status_code != 200:
+            logger.error(f"Token exchange failed: {token_response.text}")
+            return None
+        
+        token_data = token_response.json()
+        logger.info(f"Token fetched successfully, has refresh_token: {'refresh_token' in token_data}")
+        
+        # Create credentials to get user info
+        creds = Credentials(
+            token=token_data['access_token'],
+            refresh_token=token_data.get('refresh_token'),
+            token_uri='https://oauth2.googleapis.com/token',
+            client_id=client_id,
+            client_secret=client_secret
+        )
         
         # Get user info
         service = build('oauth2', 'v2', credentials=creds)
@@ -105,12 +131,12 @@ async def exchange_code_for_tokens(code: str, redirect_uri: str) -> Optional[Dic
         logger.info(f"User info retrieved: {user_info.get('email')}")
         
         return {
-            "access_token": creds.token,
-            "refresh_token": creds.refresh_token,
-            "token_uri": creds.token_uri,
-            "client_id": creds.client_id,
-            "client_secret": creds.client_secret,
-            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=creds.expiry.timestamp() - datetime.now().timestamp()) if creds.expiry else datetime.now(timezone.utc) + timedelta(hours=1),
+            "access_token": token_data['access_token'],
+            "refresh_token": token_data.get('refresh_token'),
+            "token_uri": 'https://oauth2.googleapis.com/token',
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "expires_at": datetime.now(timezone.utc) + timedelta(seconds=token_data.get('expires_in', 3600)),
             "email": user_info.get('email'),
             "name": user_info.get('name')
         }
