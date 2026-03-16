@@ -6504,8 +6504,9 @@ async def get_gmail_auth_url(
     current_user: dict = Depends(get_current_user)
 ):
     """Get Gmail OAuth authorization URL"""
-    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
-    redirect_uri = f"{frontend_url}/api/oauth/gmail/callback"
+    # Use BACKEND_URL for OAuth callback (Google redirects here directly)
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('FRONTEND_URL', 'http://localhost:3000'))
+    redirect_uri = f"{backend_url}/api/oauth/gmail/callback"
     
     logger.info(f"Gmail Auth URL request from user: {current_user['id']} ({current_user.get('email')})")
     logger.info(f"Gmail OAuth redirect_uri: {redirect_uri}")
@@ -6540,30 +6541,33 @@ async def gmail_oauth_callback(code: str, state: str):
     """Handle Gmail OAuth callback"""
     logger.info(f"Gmail OAuth callback received - state: {state[:20]}...")
     
+    # Get frontend URL for error redirects
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+    
     # Verify state
     state_doc = await db.oauth_states.find_one({"state": state})
     if not state_doc:
         logger.error(f"Gmail OAuth: Invalid state - not found in database")
-        return RedirectResponse(url="/bulk-email?error=invalid_state")
+        return RedirectResponse(url=f"{frontend_url}/bulk-email?error=invalid_state")
     
     if datetime.now(timezone.utc) > state_doc.get("expires_at", datetime.now(timezone.utc)):
         logger.error(f"Gmail OAuth: State expired for user {state_doc.get('user_id')}")
         await db.oauth_states.delete_one({"state": state})
-        return RedirectResponse(url="/bulk-email?error=expired_state")
+        return RedirectResponse(url=f"{frontend_url}/bulk-email?error=expired_state")
     
     user_id = state_doc["user_id"]
     logger.info(f"Gmail OAuth: Valid state for user_id: {user_id}")
     await db.oauth_states.delete_one({"state": state})
     
-    # Exchange code for tokens - use the SAME redirect_uri as in auth URL
-    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
-    redirect_uri = f"{frontend_url}/api/oauth/gmail/callback"
+    # Exchange code for tokens - use BACKEND_URL (must match auth URL redirect_uri)
+    backend_url = os.environ.get('BACKEND_URL', os.environ.get('FRONTEND_URL', 'http://localhost:3000'))
+    redirect_uri = f"{backend_url}/api/oauth/gmail/callback"
     logger.info(f"Gmail OAuth: Using redirect_uri: {redirect_uri}")
     
     token_data = await exchange_code_for_tokens(code, redirect_uri)
     if not token_data:
         logger.error(f"Gmail OAuth: Token exchange failed for user {user_id}")
-        return RedirectResponse(url="/bulk-email?error=token_exchange_failed")
+        return RedirectResponse(url=f"{frontend_url}/bulk-email?error=token_exchange_failed")
     
     logger.info(f"Gmail OAuth: Token exchange successful for email: {token_data.get('email')}")
     
@@ -6589,7 +6593,9 @@ async def gmail_oauth_callback(code: str, state: str):
     
     logger.info(f"Gmail OAuth: Token saved for user {user_id}, modified: {result.modified_count}, upserted: {result.upserted_id is not None}")
     
-    return RedirectResponse(url="/bulk-email?success=gmail_connected")
+    # Redirect back to FRONTEND (not backend) after successful OAuth
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+    return RedirectResponse(url=f"{frontend_url}/bulk-email?success=gmail_connected")
 
 
 @app.get("/api/bulk-email/gmail/status")
